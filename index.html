@@ -149,6 +149,14 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
 .spinecfg-prev .spine{cursor:default}
 .spinecfg-prev .spine:hover{transform:none}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
+.fcover{display:flex;gap:14px;align-items:flex-start}
+.fcover-prev{flex:0 0 auto;width:80px;min-height:120px;display:flex;align-items:flex-end;justify-content:center;--row:120px;--s:.7}
+.fcover-prev img{width:80px;height:auto;max-height:160px;border-radius:3px 5px 5px 3px;box-shadow:0 6px 14px rgba(0,0,0,.5);display:block}
+.fcover-prev .spine{cursor:default}
+.fcover-prev .spine:hover{transform:none}
+.fcover-acts{flex:1;display:flex;flex-direction:column;gap:8px}
+.fcover-acts .btn{width:100%}
+.fcover-acts .btn[hidden]{display:none}
 .tagpick{display:flex;flex-wrap:wrap;gap:6px}
 .tagpick button{background:var(--field);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
 .tagpick button.on{background:#5a3f1f;border-color:var(--accent);color:var(--ink)}
@@ -372,6 +380,17 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
     <label for="fAuthorSort">Nell'elenco autori (cognome e nome)</label>
     <input class="field" id="fAuthorSort" autocomplete="off">
     <datalist id="authorList"></datalist>
+    <label>Copertina</label>
+    <div class="fcover">
+      <div class="fcover-prev" id="fCoverPrev"></div>
+      <div class="fcover-acts">
+        <button type="button" class="btn ghost small" id="fCoverSearch">Cerca copertina online</button>
+        <button type="button" class="btn ghost small" id="fCoverPhoto">Carica foto</button>
+        <button type="button" class="btn ghost small" id="fCoverRemove">Togli copertina</button>
+      </div>
+    </div>
+    <div class="hint" id="fCoverHint"></div>
+    <div class="picks" id="fPicks"></div>
     <div class="row2">
       <div id="fYearBox">
         <label for="fYear">Anno di lettura</label>
@@ -445,7 +464,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.22";
+const APP_VERSION = "1.24";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -1320,6 +1339,7 @@ async function applyImport(books){
   state.books = books;
   try { persist(); } catch(e){ state.books = prev; openMenu(); $("mErr").textContent = errText(e); return; }
   if (goals) setMeta("goals", goals);
+  fillAuthorNotes();
   if (wish){ state.wish = wish; try { persistWish(); } catch(e){} }
   if (reading && reading.length){
     for (const r of reading) if (!state.books.some(b => b.id === r.id))
@@ -1382,6 +1402,8 @@ function openForm(book, opts = {}){
   $("fPages").value = book?.pages || "";
   $("fPub").value = book?.pubYear || "";
   state.ftags = [...(book?.tags || [])];
+  state.pendingCover = null;
+  $("fCoverHint").textContent = ""; $("fPicks").innerHTML = "";
   $("fTagNew").value = "";
   drawTagPick();
   $("fPubHint").textContent = "";
@@ -1391,12 +1413,12 @@ function openForm(book, opts = {}){
   state.spineW = Number(book?.spineW) || 0;
   state.spineH = Number(book?.spineH) || 0;
   $("fErr").textContent = "";
-  drawStars(); drawSwatches(); drawSpineCfg();
+  drawStars(); drawSwatches(); drawSpineCfg(); drawFormCover();
   if (!$("detOv").hidden) closeDetail();
   $("formOv").hidden = false;
   setTimeout(() => $("fTitle").focus(), 50);
 }
-function closeForm(){ $("formOv").hidden = true; }
+function closeForm(){ $("formOv").hidden = true; if (state.pendingCover && state.pendingCover.url && state.pendingCover.type === "blob"){ try { URL.revokeObjectURL(state.pendingCover.url); } catch(e){} } state.pendingCover = null; }
 
 $("fPubFind").addEventListener("click", async () => {
   const title = $("fTitle").value.trim(), author = $("fAuthor").value.trim();
@@ -1407,6 +1429,48 @@ $("fPubFind").addEventListener("click", async () => {
   if (y){ $("fPub").value = y; $("fPubHint").textContent = `Trovato ${y} (prima edizione secondo Google Books / Open Library): controlla che sia giusto.`; }
   else $("fPubHint").textContent = "Non l'ho trovato: inseriscilo a mano.";
 });
+async function drawFormCover(){
+  const prev = state.editing ? state.books.find(b => b.id === state.editing) : null;
+  const pc = state.pendingCover;
+  let src = null;
+  if (pc && pc.type !== "remove") src = pc.url;
+  else if (!pc && prev) src = await coverSrc(prev);
+  const fake = { id: "fc", title: $("fTitle").value.trim() || "Titolo", author: $("fAuthor").value.trim() || "Autore", color: state.color || null, spineW: state.spineW || null, spineH: state.spineH || null, pages: parseInt($("fPages").value, 10) || null };
+  $("fCoverPrev").innerHTML = src ? `<img src="${esc(src)}" alt="" onerror="this.remove()">` : spineHTML(fake).trim().replace(/^<button/, "<span").replace(/<\/button>$/, "</span>");
+  $("fCoverRemove").hidden = !src;
+}
+$("fCoverSearch").addEventListener("click", async () => {
+  const title = $("fTitle").value.trim(), author = $("fAuthor").value.trim();
+  $("fPicks").innerHTML = "";
+  if (!title || !author){ $("fCoverHint").textContent = "Scrivi prima titolo e autore."; return; }
+  if (!navigator.onLine){ $("fCoverHint").textContent = "Serve la connessione a internet. Puoi usare una foto."; return; }
+  $("fCoverHint").textContent = "Cerco…";
+  const urls = await searchCovers({ title, author });
+  if (!urls.length){ $("fCoverHint").textContent = "Non ho trovato copertine. Puoi fotografare la tua copia con “Carica foto”."; return; }
+  $("fCoverHint").textContent = "Tocca la copertina giusta:";
+  $("fPicks").innerHTML = urls.map(u => `<button type="button" data-u="${esc(u)}"><img src="${esc(u)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></button>`).join("");
+});
+$("fPicks").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-u]"); if (!btn) return;
+  state.pendingCover = { type: "url", url: btn.dataset.u };
+  $("fPicks").innerHTML = "";
+  $("fCoverHint").textContent = "Copertina scelta: verrà salvata quando premi Salva.";
+  drawFormCover();
+});
+$("fCoverPhoto").addEventListener("click", () => { $("photoFile").value = ""; $("photoFile").click(); });
+$("fCoverRemove").addEventListener("click", () => {
+  state.pendingCover = { type: "remove" };
+  $("fPicks").innerHTML = "";
+  $("fCoverHint").textContent = "La copertina verrà tolta quando premi Salva.";
+  drawFormCover();
+});
+async function applyPendingCover(id){
+  const pc = state.pendingCover; state.pendingCover = null;
+  if (!pc || !id) return;
+  if (pc.type === "url") await setCoverFromUrl(id, pc.url);
+  else if (pc.type === "blob"){ await setCoverFromBlob(id, pc.blob); try { URL.revokeObjectURL(pc.url); } catch(e){} }
+  else if (pc.type === "remove") await removeCover(id);
+}
 function drawTagPick(){
   const all = [...new Set([...allTags(), ...state.ftags])].sort((a,b) => a.localeCompare(b, "it"));
   $("fTags").innerHTML = all.length
@@ -1432,7 +1496,7 @@ $("fAuthor").addEventListener("input", () => { if (!sortTouched) $("fAuthorSort"
 $("fAuthorSort").addEventListener("input", () => { sortTouched = true; });
 $("fDate").addEventListener("change", e => { if (e.target.value) $("fYear").value = e.target.value.slice(0,4); });
 $("fStars").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const r = Number(b.dataset.r); state.rating = state.rating === r ? 0 : r; drawStars(); });
-$("fSw").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.color = b.dataset.c; drawSwatches(); drawSpinePreview(); });
+$("fSw").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.color = b.dataset.c; drawSwatches(); drawSpinePreview(); drawFormCover(); });
 $("fCancel").addEventListener("click", closeForm);
 $("formOv").addEventListener("click", e => { if (e.target.id === "formOv") closeForm(); });
 
@@ -1458,7 +1522,7 @@ $("form").addEventListener("submit", async e => {
     spineW: state.spineW || null,
     spineH: state.spineH || null,
     notes: prev?.notes || null,
-    quotes: prev?.quotes || null,
+    quotes: (prev && authorKey(prev.author) === authorKey(author) ? prev.quotes : null) || authorNoteFor(author, prev?.id) || null,
     coverUrl: prev?.coverUrl || null,
     coverLocal: prev?.coverLocal || false,
     createdAt: prev?.createdAt || new Date().toISOString(),
@@ -1469,6 +1533,7 @@ $("form").addEventListener("submit", async e => {
     if (data.reading === undefined) delete data.reading;
     const isNew = !state.editing;
     await writeBook(data, state.editing);
+    await applyPendingCover(isNew ? state.books[state.books.length - 1].id : state.editing);
     if (reading){
       const nid = isNew ? state.books[state.books.length - 1].id : state.editing;
       if (isNew && state.formFromWish){ state.wish = state.wish.filter(w => w.id !== state.formFromWish); try { persistWish(); } catch(e){} }
@@ -1485,10 +1550,39 @@ $("form").addEventListener("submit", async e => {
 /* ---------- Detail ---------- */
 function fmtDate(d){ try { return new Date(d + "T12:00:00").toLocaleDateString("it-IT", { day:"numeric", month:"long", year:"numeric" }); } catch(e){ return d; } }
 let detailId = null, notesTimer = null;
+function authorKey(a){ return norm(String(a || "").trim().replace(/\s+/g, " ")); }
+// Note sull'autore condivise tra tutti i libri dello stesso autore
+function authorNoteFor(author, excludeId){
+  const k = authorKey(author);
+  const src = state.books.filter(b => b.id !== excludeId && authorKey(b.author) === k && b.quotes)
+    .sort((a,b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0];
+  return src ? src.quotes : null;
+}
+function shareAuthorNote(id){
+  const b = state.books.find(x => x.id === id); if (!b) return 0;
+  const k = authorKey(b.author); let n = 0;
+  for (let i = 0; i < state.books.length; i++){
+    const o = state.books[i];
+    if (o.id !== id && authorKey(o.author) === k && (o.quotes || null) !== (b.quotes || null)){ state.books[i] = { ...o, quotes: b.quotes || null }; n++; }
+  }
+  if (n) persist();
+  return n;
+}
+function fillAuthorNotes(){
+  let changed = false;
+  for (let i = 0; i < state.books.length; i++){
+    const b = state.books[i];
+    if (!b.quotes){ const q = authorNoteFor(b.author, b.id); if (q){ state.books[i] = { ...b, quotes: q }; changed = true; } }
+  }
+  if (changed) try { localStorage.setItem(KEY, JSON.stringify(state.books)); } catch(e){}
+}
 function saveTexts(id){
   const n = document.getElementById("dNotes"), q = document.getElementById("dQuotes");
-  if (!n || !q) return;
+  if (!n || !q) return 0;
+  const before = (state.books.find(x => x.id === id) || {}).quotes || null;
   updateBook(id, { notes: n.value.trim() || null, quotes: q.value.trim() || null });
+  const after = q.value.trim() || null;
+  return before !== after ? shareAuthorNote(id) : 0;
 }
 function flushNotes(){
   if (!notesTimer) return;
@@ -1512,7 +1606,7 @@ async function drawCover(b){
   } else {
     box.innerHTML = `<div style="--row:180px;--s:1">${spineHTML(b)}</div>`;
   }
-  const rm = document.getElementById("dRemove"); if (rm) rm.hidden = !src;
+
 }
 function openDetail(id){
   const b = state.books.find(x => x.id === id); if (!b) return;
@@ -1530,13 +1624,6 @@ function openDetail(id){
         <div class="chips" style="margin:12px 0 0">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}${(b.tags || []).map(t => `<button type="button" class="chip tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>
       </div>
     </div>
-    <div class="coveracts">
-      <button class="btn ghost small" id="dSearch">Cerca copertina online</button>
-      <button class="btn ghost small" id="dPhoto">Carica foto</button>
-      <button class="btn ghost small" id="dRemove" hidden>Togli</button>
-    </div>
-    <div class="hint" id="dHint"></div>
-    <div class="picks" id="dPicks"></div>
     ${b.reading ? `<button class="btn" id="dFinish" style="width:100%;margin-top:14px">L'ho finito! Mettilo sullo scaffale</button>` : ""}
     <label for="dNotes">Trama</label>
     <textarea class="field notesarea" id="dNotes" placeholder="Di cosa parla il libro…">${esc(b.notes || "")}</textarea>
@@ -1561,36 +1648,13 @@ function openDetail(id){
       clearTimeout(notesTimer);
       notesTimer = setTimeout(() => {
         notesTimer = null;
-        try { saveTexts(id); $(savedId).textContent = "Salvato"; }
+        try { const n = saveTexts(id); $(savedId).textContent = n ? `Salvato · aggiornato anche in ${n} ${n === 1 ? "altro libro" : "altri libri"} di questo autore` : "Salvato"; }
         catch(e){ $("dErr").textContent = errText(e); }
       }, 600);
     });
     $(elId).addEventListener("blur", flushNotes);
   }
 
-  $("dSearch").onclick = async () => {
-    $("dHint").textContent = ""; $("dPicks").innerHTML = "";
-    if (!navigator.onLine){ $("dHint").textContent = "Serve la connessione a internet per cercare la copertina. Puoi usare una foto."; return; }
-    $("dHint").textContent = "Cerco…";
-    const urls = await searchCovers(b);
-    if (detailId !== id) return;
-    if (!urls.length){ $("dHint").textContent = "Non ho trovato copertine. Puoi fotografare la tua copia con “Usa una foto”."; return; }
-    $("dHint").textContent = "Tocca la copertina giusta:";
-    $("dPicks").innerHTML = urls.map(u => `<button type="button" data-u="${esc(u)}"><img src="${esc(u)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></button>`).join("");
-  };
-  $("dPicks").onclick = async e => {
-    const btn = e.target.closest("button[data-u]"); if (!btn) return;
-    const cur = state.books.find(x => x.id === id);
-    if (!(await askConfirm("Usare questa copertina?", cur && (cur.coverUrl || cur.coverLocal) ? "Sostituirà la copertina attuale." : "", "Usa copertina"))) return;
-    $("dHint").textContent = "Salvo la copertina…"; $("dPicks").innerHTML = "";
-    const nb = await setCoverFromUrl(id, btn.dataset.u);
-    $("dHint").textContent = nb && nb.coverLocal ? "" : "Copertina impostata: sarà disponibile offline dopo averla vista una volta.";
-    drawCover(nb || b);
-  };
-  $("dPhoto").onclick = () => { $("photoFile").value = ""; $("photoFile").click(); };
-  $("dRemove").onclick = async () => {
-    if (!(await askConfirm("Togliere la copertina?", "Sullo scaffale e nella scheda tornerà il dorso.", "Togli", true))) return;
-    const nb = await removeCover(id); $("dHint").textContent = ""; drawCover(nb || b); };
   $("dClose").onclick = closeDetail;
   if (b.reading) $("dFinish").onclick = () => { flushNotes(); closeDetail(); openFinish(id); };
   $("dEdit").onclick = () => { flushNotes(); openForm(state.books.find(x => x.id === id)); };
@@ -1601,17 +1665,14 @@ function openDetail(id){
   };
 }
 $("photoFile").addEventListener("change", async e => {
-  const f = e.target.files && e.target.files[0]; if (!f || !detailId) return;
-  const id = detailId;
-  const cur = state.books.find(x => x.id === id);
-  if (!(await askConfirm("Usare questa foto come copertina?", cur && (cur.coverUrl || cur.coverLocal) ? "Sostituirà la copertina attuale." : "", "Usa foto"))) return;
-  $("dHint").textContent = "Salvo la foto…"; $("dPicks").innerHTML = "";
+  const f = e.target.files && e.target.files[0]; if (!f || $("formOv").hidden) return;
+  $("fCoverHint").textContent = "Preparo la foto…"; $("fPicks").innerHTML = "";
   try {
     const blob = await photoToBlob(f);
-    const nb = await setCoverFromBlob(id, blob);
-    $("dHint").textContent = "";
-    drawCover(nb);
-  } catch(err){ $("dHint").textContent = "Non sono riuscita a usare questa immagine."; }
+    state.pendingCover = { type: "blob", blob, url: URL.createObjectURL(blob) };
+    $("fCoverHint").textContent = "Foto scelta: verrà salvata quando premi Salva.";
+    drawFormCover();
+  } catch(err){ $("fCoverHint").textContent = "Non sono riuscita a usare questa immagine."; }
 });
 $("detOv").addEventListener("click", e => {
   if (e.target.id === "detOv") return closeDetail();
@@ -1636,6 +1697,7 @@ $("credits").innerHTML = `<b>La mia libreria</b><br>Versione ${APP_VERSION} · b
 state.books = loadBooks();
 state.wish = loadWish();
 migrateOldReading();
+fillAuthorNotes();
 if (!getMeta().firstSeenAt) setMeta("firstSeenAt", new Date().toISOString());
 showView((location.hash || "").slice(1), false);
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
