@@ -125,6 +125,8 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
 @media (max-width:640px){
   .overlay{align-items:flex-end;padding:0}
   .sheet{border-radius:18px 18px 0 0;max-height:92vh;padding-bottom:calc(22px + env(safe-area-inset-bottom))}
+  #detOv{align-items:stretch}
+  #detOv .sheet{border-radius:0;max-height:none;height:100%;padding-top:calc(18px + env(safe-area-inset-top));border:0;-webkit-overflow-scrolling:touch}
 }
 .sheet h3{font-family:"Cormorant Garamond",Georgia,serif;font-size:28px;font-weight:600;margin:0 0 14px}
 .sheet label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}
@@ -146,8 +148,8 @@ textarea.field{min-height:80px;resize:vertical}
 .iconbtn.back{font-size:28px;padding-bottom:3px;flex:0 0 auto}
 .iconbtn[hidden],.btn[hidden],.home[hidden],.stats[hidden],#viewLib[hidden]{display:none}
 #homeLink{cursor:pointer}
-.home{max-width:1100px;margin:0 auto;padding:18px calc(20px + env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));display:grid;gap:16px}
-@media (min-width:700px){ .home{grid-template-columns:1fr 1fr} }
+.home{max-width:1100px;margin:0 auto;padding:18px calc(20px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));display:flex;flex-direction:column;gap:16px;min-height:calc(100vh - 110px - env(safe-area-inset-top));min-height:calc(100dvh - 110px - env(safe-area-inset-top))}
+
 .card{display:flex;align-items:center;gap:16px;width:100%;text-align:left;background:linear-gradient(180deg,#2a2119,#211a13);border:1px solid #4a3d2e;border-radius:20px;padding:18px;color:var(--ink);cursor:pointer;box-shadow:0 12px 30px rgba(0,0,0,.35);transition:transform .15s, border-color .15s}
 .card:hover,.card:focus-visible{transform:translateY(-2px);border-color:var(--accent);outline:none}
 .card-art{flex:0 0 auto;width:120px;height:96px;border-radius:10px;background:#140f0b;display:flex;align-items:flex-end;gap:2px;padding:0 8px;position:relative;overflow:hidden;border-bottom:8px solid #8a5a33}
@@ -175,10 +177,10 @@ textarea.field{min-height:80px;resize:vertical}
 #homeBanner:empty{display:none}
 .wishview{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
 .wishview[hidden]{display:none}
-.card-art.wish{align-items:center;justify-content:center;border-bottom:8px solid #8a5a33}
-.card-art.wish .mag{font-size:40px;opacity:.9}
+.card-art.wish{align-items:flex-end;border-bottom:8px solid #8a5a33}
+.card-art.wish .lens{position:absolute;right:6px;bottom:-4px;width:70px;height:70px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.6));pointer-events:none}
 .wish-note{white-space:pre-wrap;line-height:1.5;font-size:13px;text-align:justify;background:var(--field);border-radius:12px;padding:12px 14px;margin-top:14px}
-.credits{text-align:center;color:#8e7c62;font-size:12px;line-height:1.6;margin-top:18px;letter-spacing:.3px}
+.credits{text-align:center;color:#8e7c62;font-size:12px;line-height:1.6;margin-top:auto;padding-top:24px;letter-spacing:.3px}
 .credits b{font-family:"Cormorant Garamond",Georgia,serif;font-size:16px;font-weight:600;color:var(--muted);letter-spacing:.2px}
 .banner{display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap;background:#3a2a17;border:1px solid #8a6a3a;border-radius:16px;padding:14px 16px}
 .banner b{display:block;font-size:15px}
@@ -214,7 +216,9 @@ textarea.field{min-height:80px;resize:vertical}
 .detail .notes{white-space:pre-wrap;line-height:1.5;font-size:15px;background:var(--field);border-radius:12px;padding:12px 14px}
 .detail .st{color:var(--accent);font-size:20px;letter-spacing:2px}
 .mini{display:flex;gap:16px;align-items:flex-start}
-.cover{width:120px;flex:0 0 auto;border-radius:4px 6px 6px 4px;box-shadow:0 8px 20px rgba(0,0,0,.5), inset 3px 0 0 rgba(255,255,255,.08);display:block;background:#2a221a;object-fit:cover;aspect-ratio:2/3}
+.cover{width:120px;height:auto;max-height:240px;flex:0 0 auto;border-radius:4px 6px 6px 4px;box-shadow:0 8px 20px rgba(0,0,0,.5);display:block;object-fit:contain}
+#dCover{flex:0 0 auto;width:120px;min-height:180px;display:flex;align-items:flex-start}
+@media (min-width:641px){ #dCover{width:140px} }
 @media (min-width:641px){ .cover{width:140px} }
 .coveracts{display:flex;flex-wrap:nowrap;gap:5px;margin:14px 0 4px}
 .coveracts{align-items:stretch}
@@ -368,7 +372,7 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
 
 <script>
 (() => {
-const APP_VERSION = "1.9";
+const APP_VERSION = "1.11";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
@@ -640,15 +644,24 @@ function persistWish(){
   setMeta("lastChangeAt", new Date().toISOString());
 }
 let wishQ = "";
+const LENS_SVG = `<svg class="lens" viewBox="0 0 100 100" aria-hidden="true">
+  <defs><radialGradient id="lg" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".6" stop-color="#cfe3ea" stop-opacity=".18"/><stop offset="1" stop-color="#9cc" stop-opacity=".08"/></radialGradient></defs>
+  <line x1="62" y1="62" x2="90" y2="90" stroke="#3b2414" stroke-width="13" stroke-linecap="round"/>
+  <line x1="62" y1="62" x2="90" y2="90" stroke="#7a4b28" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="28" fill="url(#lg)" stroke="#d9a65a" stroke-width="7"/>
+  <circle cx="40" cy="40" r="28" fill="none" stroke="#8a6326" stroke-width="2" stroke-opacity=".7"/>
+  <path d="M24 32 A18 18 0 0 1 36 21" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="4" stroke-linecap="round"/>
+</svg>`;
 function renderWish(){
   const all = [...(state.wish || [])].sort((a,b) => String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
   const n = all.length;
   $("homeWishSub").textContent = n ? `${n} ${n===1?"libro":"libri"} da cercare` : "Segna i libri da trovare";
-  const recent = all.slice(-7);
-  $("homeWish").innerHTML = recent.length
-    ? recent.map(b => `<div style="--row:78px;--s:.42">${spineHTML(b)}</div>`).join("")
-    : `<span class="mag">🔍</span>`;
-  $("homeWish").style.alignItems = recent.length ? "flex-end" : "center";
+  const deco = [
+    { id:"d1", title:"Da cercare", author:"a", color:"#2c5d63" }, { id:"d2", title:"Libro", author:"b", color:"#c49a3a" },
+    { id:"d3", title:"Nuovo", author:"c", color:"#7a2e2a" }, { id:"d4", title:"Desiderio", author:"d", color:"#e6d9bd" },
+    { id:"d5", title:"Lista", author:"e", color:"#23395b" }, { id:"d6", title:"Trovare", author:"f", color:"#5a3550" } ];
+  const shelfBooks = all.length ? all.slice(-6) : deco;
+  $("homeWish").innerHTML = shelfBooks.map(b => `<div style="--row:78px;--s:.42">${spineHTML(b)}</div>`).join("") + LENS_SVG;
   const list = all.filter(b => !wishQ || norm(b.title).includes(norm(wishQ)) || norm(b.author).includes(norm(wishQ)));
   let html;
   if (!n) html = `<div class="welcome"><h2>Libri da cercare</h2><p>Qui segni i libri che vuoi trovare o comprare. Quando ne leggi uno, lo sposti nella libreria con un tocco.</p><div class="actions"><button class="btn" id="wFirst">Aggiungi un libro</button></div></div>`;
@@ -1191,7 +1204,13 @@ async function drawCover(b){
   if (detailId !== b.id) return;
   if (src){
     box.innerHTML = `<img class="cover" alt="Copertina di ${esc(b.title)}" src="${esc(src)}">`;
-    box.querySelector("img").onerror = () => { box.innerHTML = `<div style="--row:180px;--s:1">${spineHTML(b)}</div>`; };
+    const img = box.querySelector("img");
+    await new Promise(res => {
+      const t = setTimeout(res, 700);
+      img.onload = () => { clearTimeout(t); res(); };
+      img.onerror = () => { clearTimeout(t); box.innerHTML = `<div style="--row:180px;--s:1">${spineHTML(b)}</div>`; res(); };
+      if (img.complete && img.naturalWidth) { clearTimeout(t); res(); }
+    });
   } else {
     box.innerHTML = `<div style="--row:180px;--s:1">${spineHTML(b)}</div>`;
   }
@@ -1231,8 +1250,8 @@ function openDetail(id){
       <button class="btn ghost" id="dEdit">Modifica</button>
       <button class="btn" id="dClose">Chiudi</button>
     </div>`;
-  $("detOv").hidden = false;
-  drawCover(b);
+  $("det").scrollTop = 0;
+  drawCover(b).then(() => { $("detOv").hidden = false; $("det").scrollTop = 0; });
 
   for (const [elId, field, savedId] of [["dNotes","notes","dSavedNotes"],["dQuotes","quotes","dSavedQuotes"]]){
     $(elId).addEventListener("input", () => {
