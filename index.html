@@ -107,8 +107,8 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
   max-height:calc(var(--row) * var(--hp) - 30px);
   line-height:1.12;position:relative;z-index:1;
 }
-.spine .au{display:block;font-size:calc(9px * var(--s) + 1px);letter-spacing:.8px;text-transform:uppercase;opacity:.85;margin-block-end:4px;font-weight:500}
-.spine .ti{display:block;font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:calc(13px * var(--s) + 2px);letter-spacing:.2px}
+.spine .au{display:block;font-size:calc(8px * var(--s) + 1px);letter-spacing:.7px;text-transform:uppercase;opacity:.85;margin-block-end:4px;font-weight:500}
+.spine .ti{display:block;font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:calc(11px * var(--s) + 1.5px);letter-spacing:.2px}
 .spine.v0::before,.spine.v0::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--g);opacity:.8;box-shadow:0 4px 0 var(--g)}
 .spine.v0::before{top:9px}.spine.v0::after{bottom:15px}
 .spine.v1::before{content:"";position:absolute;left:0;right:0;top:12px;height:18%;background:rgba(0,0,0,.28);border-top:1px solid var(--g);border-bottom:1px solid var(--g)}
@@ -173,6 +173,13 @@ textarea.field{min-height:80px;resize:vertical}
 .yrow .n{text-align:right;font-weight:600;font-size:17px}
 .span2{grid-column:1/-1}
 #homeBanner:empty{display:none}
+.wishview{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
+.wishview[hidden]{display:none}
+.card-art.wish{align-items:center;justify-content:center;border-bottom:8px solid #8a5a33}
+.card-art.wish .mag{font-size:40px;opacity:.9}
+.wish-note{white-space:pre-wrap;line-height:1.5;font-size:13px;text-align:justify;background:var(--field);border-radius:12px;padding:12px 14px;margin-top:14px}
+.credits{text-align:center;color:#8e7c62;font-size:12px;line-height:1.6;margin-top:18px;letter-spacing:.3px}
+.credits b{font-family:"Cormorant Garamond",Georgia,serif;font-size:16px;font-weight:600;color:var(--muted);letter-spacing:.2px}
 .banner{display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap;background:#3a2a17;border:1px solid #8a6a3a;border-radius:16px;padding:14px 16px}
 .banner b{display:block;font-size:15px}
 .banner span{display:block;color:#e6cfa6;font-size:13px;margin-top:3px;line-height:1.4}
@@ -200,6 +207,7 @@ textarea.field{min-height:80px;resize:vertical}
 .ok{color:#9fc79a;font-size:13px;margin-top:10px}
 .ok:empty{display:none}
 
+.detail .pub{color:var(--muted);font-size:14px;margin-top:6px;opacity:.85}
 .detail .who{color:var(--muted);font-size:16px;margin-top:-6px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 .chip{background:var(--field);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--muted)}
@@ -208,8 +216,11 @@ textarea.field{min-height:80px;resize:vertical}
 .mini{display:flex;gap:16px;align-items:flex-start}
 .cover{width:120px;flex:0 0 auto;border-radius:4px 6px 6px 4px;box-shadow:0 8px 20px rgba(0,0,0,.5), inset 3px 0 0 rgba(255,255,255,.08);display:block;background:#2a221a;object-fit:cover;aspect-ratio:2/3}
 @media (min-width:641px){ .cover{width:140px} }
-.coveracts{display:flex;flex-wrap:nowrap;gap:6px;margin:14px 0 4px}
-.coveracts .btn{flex:1 1 0;min-width:0;padding:8px 4px;font-size:12px;text-align:center;overflow:hidden;text-overflow:ellipsis}
+.coveracts{display:flex;flex-wrap:nowrap;gap:5px;margin:14px 0 4px}
+.coveracts{align-items:stretch}
+.coveracts .btn{flex:1 1 auto;min-width:0;padding:7px 8px;font-size:11.5px;line-height:1.25;letter-spacing:-.1px;text-align:center;white-space:normal;border-radius:14px}
+.coveracts #dRemove{flex:0 0 auto}
+
 .coveracts .btn[hidden]{display:none}
 .btn.small{padding:8px 13px;font-size:13px}
 .picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:10px;margin-top:10px}
@@ -246,6 +257,14 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
     </div>
     <span class="chev">›</span>
   </button>
+  <button class="card" id="goWish">
+    <div class="card-art wish" id="homeWish"></div>
+    <div class="card-body">
+      <div class="card-title">Da cercare</div>
+      <div class="card-sub" id="homeWishSub"></div>
+    </div>
+    <span class="chev">›</span>
+  </button>
   <button class="card" id="goStats">
     <div class="card-art bars" id="homeBars"></div>
     <div class="card-body">
@@ -254,9 +273,20 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
     </div>
     <span class="chev">›</span>
   </button>
+  <footer class="credits span2" id="credits"></footer>
 </section>
 
 <section id="viewStats" class="stats" hidden></section>
+
+<section id="viewWish" class="wishview" hidden>
+  <div class="controls" style="padding-left:0;padding-right:0">
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input class="field" id="wq" type="search" placeholder="Cerca tra i libri da cercare" autocomplete="off">
+    </div>
+  </div>
+  <div id="wishMain"></div>
+</section>
 
 <div id="viewLib" hidden>
 <div class="controls">
@@ -292,6 +322,12 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
         <input class="field" id="fPages" type="number" inputmode="numeric" min="1" max="5000">
       </div>
     </div>
+    <label for="fPub">Anno di pubblicazione</label>
+    <div style="display:flex;gap:8px">
+      <input class="field" id="fPub" type="number" inputmode="numeric" min="1" max="2100" placeholder="Es. 1966" style="flex:1">
+      <button type="button" class="btn ghost small" id="fPubFind" style="flex:0 0 auto">Trova</button>
+    </div>
+    <div class="hint" id="fPubHint"></div>
     <label for="fDate">Finito il (facoltativo)</label>
     <input class="field" id="fDate" type="date">
     <label>Voto</label>
@@ -332,7 +368,7 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
 
 <script>
 (() => {
-const APP_VERSION = "1.7";
+const APP_VERSION = "1.9";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
@@ -352,9 +388,9 @@ function spineHTML(b, extraClass = ""){
   const text = light ? "#2a2018" : "#f4ead6";
   const gold = light ? "#7a5a2a" : "#d8b26a";
   const pages = Number(b.pages) || 0;
-  const w = pages ? Math.max(22, Math.min(60, 16 + pages / 14)) : 26 + (h >> 4) % 16;
-  const hp = (0.80 + ((h >> 9) % 17) / 100).toFixed(2);
-  const v = (h >> 13) % 3;
+  const w = pages ? Math.max(22, Math.min(60, 16 + pages / 14)) : 26 + (h >>> 4) % 16;
+  const hp = (0.80 + ((h >>> 9) % 17) / 100).toFixed(2);
+  const v = (h >>> 13) % 3;
   return `<button class="spine v${v} ${extraClass}" data-id="${esc(b.id)}" title="${esc(b.title)} — ${esc(b.author)}"
     style="--c:${color};--t:${text};--g:${gold};--w:${w.toFixed(0)};--hp:${hp}">
     <span class="txt"><span class="au">${esc(b.author)}</span><span class="ti">${esc(b.title)}</span></span></button>`;
@@ -381,7 +417,7 @@ function matches(b){
 }
 
 function render(){
-  try { renderHome(); renderStats(); } catch(e){}
+  try { renderHome(); renderStats(); renderWish(); } catch(e){ console.error(e); }
   const books = state.books;
   const years = [...new Set([NOW_YEAR, ...books.map(b => Number(b.year)).filter(Boolean)])].sort((a,b) => b-a);
   if (state.view !== "all" && !years.includes(state.view)) state.view = NOW_YEAR;
@@ -437,13 +473,14 @@ function render(){
 /* ---------- Pagine ---------- */
 let currentView = "home";
 function showView(v, push = true){
-  if (!["home","libreria","statistiche"].includes(v)) v = "home";
+  if (!["home","libreria","statistiche","dacercare"].includes(v)) v = "home";
   currentView = v;
   $("viewHome").hidden = v !== "home";
   $("viewLib").hidden = v !== "libreria";
   $("viewStats").hidden = v !== "statistiche";
+  $("viewWish").hidden = v !== "dacercare";
   $("backBtn").hidden = v === "home";
-  $("addBtn").hidden = v !== "libreria";
+  $("addBtn").hidden = v !== "libreria" && v !== "dacercare";
   if (push){
     const h = v === "home" ? "" : "#" + v;
     if (location.hash !== h) history.pushState(null, "", h || location.pathname);
@@ -458,6 +495,7 @@ $("homeBanner").addEventListener("click", async e => {
   if (e.target.id === "bkNow"){ openMenu(); $("mOk").textContent = await exportBackup(); render(); }
 });
 $("goStats").addEventListener("click", () => showView("statistiche"));
+$("goWish").addEventListener("click", () => showView("dacercare"));
 $("backBtn").addEventListener("click", () => showView("home"));
 $("homeLink").addEventListener("click", () => showView("home"));
 
@@ -592,6 +630,108 @@ function bannerHTML(){
   const txt = d ? `L'ultimo backup è di ${daysSince(d)} giorni fa e da allora hai fatto delle modifiche.` : "Non hai ancora salvato un backup della libreria.";
   return `<div class="banner"><div><b>È ora di fare un backup</b><span>${txt}</span></div>
     <div class="banner-acts"><button class="btn ghost small" id="bkLater">Più tardi</button><button class="btn small" id="bkNow">Fai backup</button></div></div>`;
+}
+
+/* ---------- Da cercare ---------- */
+const WKEY = "libreria.wish.v1";
+function loadWish(){ try { const v = JSON.parse(localStorage.getItem(WKEY)); return Array.isArray(v) ? v : []; } catch(e){ return []; } }
+function persistWish(){
+  try { localStorage.setItem(WKEY, JSON.stringify(state.wish)); } catch(e){ throw { code: "storage" }; }
+  setMeta("lastChangeAt", new Date().toISOString());
+}
+let wishQ = "";
+function renderWish(){
+  const all = [...(state.wish || [])].sort((a,b) => String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+  const n = all.length;
+  $("homeWishSub").textContent = n ? `${n} ${n===1?"libro":"libri"} da cercare` : "Segna i libri da trovare";
+  const recent = all.slice(-7);
+  $("homeWish").innerHTML = recent.length
+    ? recent.map(b => `<div style="--row:78px;--s:.42">${spineHTML(b)}</div>`).join("")
+    : `<span class="mag">🔍</span>`;
+  $("homeWish").style.alignItems = recent.length ? "flex-end" : "center";
+  const list = all.filter(b => !wishQ || norm(b.title).includes(norm(wishQ)) || norm(b.author).includes(norm(wishQ)));
+  let html;
+  if (!n) html = `<div class="welcome"><h2>Libri da cercare</h2><p>Qui segni i libri che vuoi trovare o comprare. Quando ne leggi uno, lo sposti nella libreria con un tocco.</p><div class="actions"><button class="btn" id="wFirst">Aggiungi un libro</button></div></div>`;
+  else if (!list.length) html = `<p class="nores">Nessun libro corrisponde alla ricerca</p>`;
+  else html = `<section class="year-sec"><div class="year-head"><h2>Da cercare</h2><span>${wishQ ? `${list.length} di ${n}` : `${n} ${n===1?"libro":"libri"}`}</span></div>
+    <div class="case"><div class="shelf">${list.map(b => `<div class="slot">${spineHTML(b, b.id === state.newWishId ? "new" : "")}</div>`).join("")}</div></div></section>`;
+  $("wishMain").innerHTML = html;
+  state.newWishId = null;
+}
+$("wq").addEventListener("input", e => { wishQ = e.target.value.trim(); renderWish(); });
+$("wishMain").addEventListener("click", e => {
+  if (e.target.id === "wFirst") return openWishForm(null);
+  const sp = e.target.closest(".spine"); if (sp) openWishDetail(sp.dataset.id);
+});
+function openWishForm(item){
+  $("menu").innerHTML = `
+    <h3>${item ? "Modifica" : "Libro da cercare"}</h3>
+    <label for="wTitle">Titolo</label><input class="field" id="wTitle" autocomplete="off" value="${esc(item?.title || "")}">
+    <label for="wAuthor">Autore</label><input class="field" id="wAuthor" list="authorList" autocomplete="off" value="${esc(item?.author || "")}">
+    <label for="wNotes">Note</label><textarea class="field notesarea" id="wNotes" style="min-height:110px" placeholder="Dove cercarlo, edizione, prezzo, chi te l'ha consigliato…">${esc(item?.notes || "")}</textarea>
+    <div class="err" id="wErr"></div>
+    <div class="actions"><button class="btn ghost" id="wNo">Annulla</button><button class="btn" id="wYes">${item ? "Salva" : "Aggiungi"}</button></div>`;
+  $("menuOv").hidden = false;
+  setTimeout(() => $("wTitle").focus(), 50);
+  $("wNo").onclick = () => { $("menuOv").hidden = true; };
+  $("wYes").onclick = async () => {
+    const title = $("wTitle").value.trim(), author = $("wAuthor").value.trim();
+    if (!title || !author){ $("wErr").textContent = "Titolo e autore sono obbligatori."; return; }
+    if (item && !(await askConfirm("Salvare le modifiche?", `Aggiorno «${title}».`, "Salva"))) return;
+    const data = { title, author, notes: $("wNotes").value.trim() || null };
+    try {
+      if (item){ const i = state.wish.findIndex(w => w.id === item.id); state.wish[i] = { ...state.wish[i], ...data, updatedAt: new Date().toISOString() }; }
+      else { const id = "w" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); state.newWishId = id; state.wish.push({ id, ...data, color: null, pages: null, createdAt: new Date().toISOString() }); }
+      persistWish(); $("menuOv").hidden = true; render();
+    } catch(e){ $("wErr").textContent = errText(e); }
+  };
+}
+function openWishDetail(id){
+  const w = state.wish.find(x => x.id === id); if (!w) return;
+  $("menu").innerHTML = `
+    <div class="mini">
+      <div style="--row:150px;--s:1">${spineHTML(w)}</div>
+      <div style="min-width:0"><h3 style="margin-bottom:8px">${esc(w.title)}</h3><div style="color:var(--muted);font-size:16px">${esc(w.author)}</div>
+      <div class="chips" style="margin:12px 0 0"><span class="chip">Da cercare</span></div></div>
+    </div>
+    ${w.notes ? `<div class="wish-note">${esc(w.notes)}</div>` : ""}
+    <div class="err" id="wdErr"></div>
+    <button class="btn" id="wdRead" style="width:100%;margin-top:16px">L'ho letto: spostalo in libreria</button>
+    <div class="actions">
+      <button class="btn ghost" id="wdDel">Elimina</button>
+      <button class="btn ghost" id="wdEdit">Modifica</button>
+      <button class="btn ghost" id="wdClose">Chiudi</button>
+    </div>`;
+  $("menuOv").hidden = false;
+  $("wdClose").onclick = () => { $("menuOv").hidden = true; };
+  $("wdEdit").onclick = () => openWishForm(w);
+  $("wdDel").onclick = async () => {
+    if (!(await askConfirm("Eliminare dalla lista?", `«${w.title}» verrà tolto dai libri da cercare.`, "Elimina", true))) return;
+    state.wish = state.wish.filter(x => x.id !== id);
+    try { persistWish(); } catch(e){}
+    $("menuOv").hidden = true; render();
+  };
+  $("wdRead").onclick = () => {
+    $("menu").innerHTML = `
+      <h3>Spostalo in libreria</h3>
+      <p style="color:var(--muted);line-height:1.5">«${esc(w.title)}» di ${esc(w.author)}</p>
+      <label for="mvYear">Anno di lettura</label>
+      <input class="field" id="mvYear" type="number" inputmode="numeric" min="1900" max="2100" value="${NOW_YEAR}">
+      <div class="err" id="mvErr"></div>
+      <div class="actions"><button class="btn ghost" id="mvNo">Annulla</button><button class="btn" id="mvYes">Sposta</button></div>`;
+    $("mvNo").onclick = () => openWishDetail(id);
+    $("mvYes").onclick = async () => {
+      const year = parseInt($("mvYear").value, 10);
+      if (!year || year < 1900 || year > 2100){ $("mvErr").textContent = "Inserisci un anno valido."; return; }
+      if (!(await askConfirm("Spostare nella libreria?", `«${w.title}» verrà messo sullo scaffale del ${year} e tolto dai libri da cercare.`, "Sposta"))) return;
+      try {
+        await writeBook({ title: w.title, author: w.author, year, pages: null, finished: null, rating: null, color: w.color || null,
+          notes: w.notes || null, quotes: null, coverUrl: null, coverLocal: false, pubYear: null, authorSort: null, createdAt: new Date().toISOString() }, null);
+        state.wish = state.wish.filter(x => x.id !== id); persistWish();
+        $("menuOv").hidden = true; state.view = year; showView("libreria");
+      } catch(e){ $("mvErr").textContent = errText(e); }
+    };
+  };
 }
 
 /* ---------- Conferma ---------- */
@@ -755,6 +895,23 @@ async function searchCovers(b){
   return out.slice(0, 9);
 }
 
+async function findPubYear(b){
+  const title = b.title.length > 40 ? b.title.split(/[.:]/)[0].trim() : b.title;
+  const author = b.author.split(",")[0].trim();
+  const years = [];
+  try {
+    const r = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=5&fields=first_publish_year`);
+    if (r.ok){ const j = await r.json(); for (const d of j.docs || []) if (d.first_publish_year) years.push(d.first_publish_year); }
+  } catch(e){}
+  if (Date.now() >= googleBusyUntil) try {
+    const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(`intitle:${title} inauthor:${author}`)}&maxResults=20&printType=books`);
+    if (r.status === 429) googleBusyUntil = Date.now() + 20000;
+    else if (r.ok){ const j = await r.json(); for (const it of j.items || []){ const y = parseInt(((it.volumeInfo || {}).publishedDate || "").slice(0,4), 10); if (y > 1000) years.push(y); } }
+  } catch(e){}
+  const valid = years.filter(y => y > 1000 && y <= new Date().getFullYear());
+  return valid.length ? Math.min(...valid) : null;
+}
+
 /* ---------- Backup ---------- */
 function backupName(){ return "libreria-backup-" + new Date().toISOString().slice(0,10) + ".json"; }
 async function exportBackup(){
@@ -769,7 +926,7 @@ async function exportBackup(){
     }
     books.push(copy);
   }
-  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), books });
+  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), wish: state.wish, books });
   const name = backupName();
   const file = new File([payload], name, { type: "application/json" });
   try {
@@ -801,6 +958,7 @@ function parseBackup(text){
       rating: Number(b.rating) || null, color: typeof b.color === "string" && /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : null,
       notes: typeof b.notes === "string" ? b.notes : null,
       quotes: typeof b.quotes === "string" ? b.quotes : null,
+      pubYear: parseInt(b.pubYear, 10) > 0 ? parseInt(b.pubYear, 10) : null,
       authorSort: typeof b.authorSort === "string" && b.authorSort.trim() ? b.authorSort.trim() : null,
       coverUrl: typeof b.coverUrl === "string" && /^https:\/\//.test(b.coverUrl) ? b.coverUrl : null,
       coverLocal: false,
@@ -814,6 +972,12 @@ function parseBackup(text){
     const g = {}; for (const [y, n] of Object.entries(data.goals)){ const yy = parseInt(y, 10), nn = parseInt(n, 10); if (yy && nn > 0) g[yy] = nn; }
     out.goals = g;
   }
+  if (data && Array.isArray(data.wish)){
+    out.wish = data.wish.filter(w => w && typeof w.title === "string" && typeof w.author === "string").map(w => ({
+      id: String(w.id || ("w" + Math.random().toString(36).slice(2,10))), title: w.title.trim(), author: w.author.trim(),
+      notes: typeof w.notes === "string" ? w.notes : null, color: null, pages: null,
+      createdAt: typeof w.createdAt === "string" ? w.createdAt : new Date().toISOString() }));
+  }
   return out;
 }
 function openMenu(msg){
@@ -823,6 +987,7 @@ function openMenu(msg){
     <p>I libri sono salvati su questo dispositivo e funzionano anche offline. Per portarli su un altro dispositivo, esporta un backup e importalo lì.</p>
     <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
     <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
+    <button class="item" id="mPub">Cerca gli anni di pubblicazione mancanti<small>${state.books.filter(b => !b.pubYear).length} libri senza anno · serve internet</small></button>
     <button class="item" id="mCovers">Cerca le copertine mancanti<small>${state.books.filter(b => !b.coverUrl && !b.coverLocal).length} libri senza copertina · serve internet</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
     <div class="err" id="mErr"></div>
@@ -832,6 +997,26 @@ function openMenu(msg){
   $("mClose").onclick = () => $("menuOv").hidden = true;
   $("mExport").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportBackup(); render(); };
   $("mImport").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
+  $("mPub").onclick = async () => {
+    if (!navigator.onLine){ $("mErr").textContent = "Serve la connessione a internet."; return; }
+    const todo = state.books.filter(b => !b.pubYear);
+    if (!todo.length){ $("mOk").textContent = "Tutti i libri hanno già l'anno di pubblicazione."; return; }
+    if (!(await askConfirm("Cercare gli anni di pubblicazione?", `Cerco online l'anno della prima edizione per ${todo.length} libri e lo inserisco in automatico. Potrai correggerlo da Modifica.`, "Cerca"))) return;
+    bulkStop = false; let found = 0, done = 0;
+    $("menu").innerHTML = `<h3>Cerco gli anni</h3><p id="bProg">0 di ${todo.length}…</p>
+      <div class="actions"><button class="btn ghost" id="bStop">Interrompi</button><button class="btn" id="bClose">Chiudi</button></div>`;
+    $("bStop").onclick = () => { bulkStop = true; };
+    $("bClose").onclick = () => { $("menuOv").hidden = true; };
+    for (const b of todo){
+      if (bulkStop) break;
+      try { const y = await findPubYear(b); if (y){ updateBook(b.id, { pubYear: y }); found++; } } catch(e){}
+      done++;
+      const p = document.getElementById("bProg"); if (p) p.textContent = `${done} di ${todo.length} · trovati ${found}`;
+      await new Promise(r => setTimeout(r, 900));
+    }
+    const p = document.getElementById("bProg"); if (p) p.textContent = `Fatto: trovati ${found} anni su ${done} libri${bulkStop ? " (interrotto)" : ""}.`;
+    const st = document.getElementById("bStop"); if (st) st.remove();
+  };
   $("mCovers").onclick = async () => {
     const n = state.books.filter(b => !b.coverUrl && !b.coverLocal).length;
     if (n && !(await askConfirm("Cercare le copertine mancanti?", `Cerco online la copertina per ${n} libri e la applico in automatico.`, "Cerca"))) return;
@@ -893,9 +1078,11 @@ async function applyImport(books){
     delete b.coverData;
   }
   const goals = books.goals; delete books.goals;
+  const wish = books.wish; delete books.wish;
   state.books = books;
   try { persist(); } catch(e){ state.books = prev; openMenu(); $("mErr").textContent = errText(e); return; }
   if (goals) setMeta("goals", goals);
+  if (wish){ state.wish = wish; try { persistWish(); } catch(e){} }
   setMeta("lastBackupAt", new Date().toISOString());
   state.view = "all"; state.q = ""; state.author = ""; $("q").value = "";
   render();
@@ -922,6 +1109,8 @@ function openForm(book){
   sortTouched = !!book?.authorSort;
   $("fYear").value = book?.year || (state.view === "all" ? NOW_YEAR : state.view);
   $("fPages").value = book?.pages || "";
+  $("fPub").value = book?.pubYear || "";
+  $("fPubHint").textContent = "";
   $("fDate").value = book?.finished || "";
   state.rating = book?.rating || 0;
   state.color = book?.color || "";
@@ -933,6 +1122,15 @@ function openForm(book){
 }
 function closeForm(){ $("formOv").hidden = true; }
 
+$("fPubFind").addEventListener("click", async () => {
+  const title = $("fTitle").value.trim(), author = $("fAuthor").value.trim();
+  if (!title || !author){ $("fPubHint").textContent = "Scrivi prima titolo e autore."; return; }
+  if (!navigator.onLine){ $("fPubHint").textContent = "Serve la connessione a internet."; return; }
+  $("fPubHint").textContent = "Cerco…";
+  const y = await findPubYear({ title, author });
+  if (y){ $("fPub").value = y; $("fPubHint").textContent = `Trovato ${y} (prima edizione secondo Google Books / Open Library): controlla che sia giusto.`; }
+  else $("fPubHint").textContent = "Non l'ho trovato: inseriscilo a mano.";
+});
 let sortTouched = false;
 $("fAuthor").addEventListener("input", () => { if (!sortTouched) $("fAuthorSort").value = authorLabel($("fAuthor").value); });
 $("fAuthorSort").addEventListener("input", () => { sortTouched = true; });
@@ -953,6 +1151,7 @@ $("form").addEventListener("submit", async e => {
     title, author, year,
     authorSort: (() => { const v = $("fAuthorSort").value.trim(); return v && v !== authorLabel(author) ? v : null; })(),
     pages: parseInt($("fPages").value, 10) || null,
+    pubYear: (() => { const v = parseInt($("fPub").value, 10); return v > 0 && v <= 2100 ? v : null; })(),
     finished: $("fDate").value || null,
     rating: state.rating || null,
     color: state.color || null,
@@ -1002,21 +1201,20 @@ function openDetail(id){
   const b = state.books.find(x => x.id === id); if (!b) return;
   detailId = id;
   const chips = [`Letto nel ${b.year}`];
-  if (b.finished) chips.push(`Finito il ${fmtDate(b.finished)}`);
-  if (b.pages) chips.push(`${b.pages} pagine`);
   $("det").innerHTML = `
     <div class="mini">
       <div id="dCover"></div>
       <div style="min-width:0">
         <h3 style="margin-bottom:10px">${esc(b.title)}</h3>
         <div class="who">${esc(b.author)}</div>
+        <div class="pub">${b.pubYear ? `Pubblicato nel ${b.pubYear}` : `Anno di pubblicazione non indicato`}</div>
         ${b.rating ? `<div class="st" style="margin-top:8px">${"★".repeat(b.rating)}<span style="color:#5d4c39">${"★".repeat(5-b.rating)}</span></div>` : ""}
         <div class="chips" style="margin:12px 0 0">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
       </div>
     </div>
     <div class="coveracts">
-      <button class="btn ghost small" id="dSearch">Cerca online</button>
-      <button class="btn ghost small" id="dPhoto">Usa una foto</button>
+      <button class="btn ghost small" id="dSearch">Cerca copertina online</button>
+      <button class="btn ghost small" id="dPhoto">Carica foto</button>
       <button class="btn ghost small" id="dRemove" hidden>Togli</button>
     </div>
     <div class="hint" id="dHint"></div>
@@ -1096,7 +1294,7 @@ $("photoFile").addEventListener("change", async e => {
 $("detOv").addEventListener("click", e => { if (e.target.id === "detOv") closeDetail(); });
 
 /* ---------- Events ---------- */
-$("addBtn").addEventListener("click", () => openForm(null));
+$("addBtn").addEventListener("click", () => currentView === "dacercare" ? openWishForm(null) : openForm(null));
 $("main").addEventListener("click", e => {
   if (e.target.id === "wAdd") return openForm(null);
   if (e.target.id === "wImport"){ $("importFile").value = ""; return $("importFile").click(); }
@@ -1107,7 +1305,9 @@ let qt; $("q").addEventListener("input", e => { clearTimeout(qt); qt = setTimeou
 $("authorSel").addEventListener("change", e => { state.author = e.target.value; if (state.author) state.view = "all"; render(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("cfOv").hidden){ $("cfNo").click(); return; } if (e.key === "Escape"){ closeForm(); if (!$("detOv").hidden) closeDetail(); $("menuOv").hidden = true; } });
 
+$("credits").innerHTML = `<b>La mia libreria</b><br>Versione ${APP_VERSION} · by Massimo Merigo`;
 state.books = loadBooks();
+state.wish = loadWish();
 if (!getMeta().firstSeenAt) setMeta("firstSeenAt", new Date().toISOString());
 showView((location.hash || "").slice(1), false);
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
