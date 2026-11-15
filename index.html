@@ -232,6 +232,18 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
   </form>
 </div>
 
+<!-- Conferma -->
+<div class="overlay" id="cfOv" hidden style="z-index:40">
+  <div class="sheet" style="max-width:380px">
+    <h3 id="cfTitle" style="font-size:24px"></h3>
+    <p id="cfText" style="color:var(--muted);line-height:1.5;margin:0"></p>
+    <div class="actions">
+      <button class="btn ghost" id="cfNo">Annulla</button>
+      <button class="btn" id="cfYes">Conferma</button>
+    </div>
+  </div>
+</div>
+
 <!-- Menu -->
 <div class="overlay" id="menuOv" hidden>
   <div class="sheet menu" id="menu"></div>
@@ -344,6 +356,19 @@ function render(){
   }
   $("main").innerHTML = html;
   state.newId = null;
+}
+
+/* ---------- Conferma ---------- */
+function askConfirm(title, text, okLabel = "Conferma", danger = false){
+  return new Promise(resolve => {
+    $("cfTitle").textContent = title; $("cfText").textContent = text || "";
+    const yes = $("cfYes"), no = $("cfNo"), ov = $("cfOv");
+    yes.textContent = okLabel; yes.className = danger ? "btn danger" : "btn";
+    const done = v => { ov.hidden = true; yes.onclick = no.onclick = ov.onclick = null; resolve(v); };
+    yes.onclick = () => done(true); no.onclick = () => done(false);
+    ov.onclick = e => { if (e.target === ov) done(false); };
+    ov.hidden = false; setTimeout(() => yes.focus(), 30);
+  });
 }
 
 /* ---------- Data (salvati sul dispositivo) ---------- */
@@ -557,7 +582,11 @@ function openMenu(msg){
   $("mClose").onclick = () => $("menuOv").hidden = true;
   $("mExport").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportBackup(); };
   $("mImport").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
-  $("mCovers").onclick = bulkCovers;
+  $("mCovers").onclick = async () => {
+    const n = state.books.filter(b => !b.coverUrl && !b.coverLocal).length;
+    if (n && !(await askConfirm("Cercare le copertine mancanti?", `Cerco online la copertina per ${n} libri e la applico in automatico.`, "Cerca"))) return;
+    bulkCovers();
+  };
 }
 let bulkStop = false;
 async function bulkCovers(){
@@ -680,6 +709,7 @@ $("form").addEventListener("submit", async e => {
     coverLocal: prev?.coverLocal || false,
     createdAt: prev?.createdAt || new Date().toISOString(),
   };
+  if (prev && !(await askConfirm("Salvare le modifiche?", `Aggiorno «${title}».`, "Salva"))) return;
   const btn = $("fSave"); btn.disabled = true;
   try {
     await writeBook(data, state.editing);
@@ -778,24 +808,30 @@ function openDetail(id){
   };
   $("dPicks").onclick = async e => {
     const btn = e.target.closest("button[data-u]"); if (!btn) return;
+    const cur = state.books.find(x => x.id === id);
+    if (!(await askConfirm("Usare questa copertina?", cur && (cur.coverUrl || cur.coverLocal) ? "Sostituirà la copertina attuale." : "", "Usa copertina"))) return;
     $("dHint").textContent = "Salvo la copertina…"; $("dPicks").innerHTML = "";
     const nb = await setCoverFromUrl(id, btn.dataset.u);
     $("dHint").textContent = nb && nb.coverLocal ? "" : "Copertina impostata: sarà disponibile offline dopo averla vista una volta.";
     drawCover(nb || b);
   };
   $("dPhoto").onclick = () => { $("photoFile").value = ""; $("photoFile").click(); };
-  $("dRemove").onclick = async () => { const nb = await removeCover(id); $("dHint").textContent = ""; drawCover(nb || b); };
+  $("dRemove").onclick = async () => {
+    if (!(await askConfirm("Togliere la copertina?", "Sullo scaffale e nella scheda tornerà il dorso.", "Togli", true))) return;
+    const nb = await removeCover(id); $("dHint").textContent = ""; drawCover(nb || b); };
   $("dClose").onclick = closeDetail;
   $("dEdit").onclick = () => { flushNotes(); openForm(state.books.find(x => x.id === id)); };
-  let armed = false;
   $("dDel").onclick = async () => {
-    if (!armed){ armed = true; $("dDel").textContent = "Conferma eliminazione"; $("dDel").className = "btn danger"; return; }
+    const cur = state.books.find(x => x.id === id);
+    if (!(await askConfirm("Eliminare il libro?", `«${cur ? cur.title : ""}» verrà tolto dalla libreria, con copertina, note e citazioni.`, "Elimina", true))) return;
     try { notesTimer && clearTimeout(notesTimer); notesTimer = null; await removeBook(id); closeDetail(); } catch(err){ $("dErr").textContent = errText(err); }
   };
 }
 $("photoFile").addEventListener("change", async e => {
   const f = e.target.files && e.target.files[0]; if (!f || !detailId) return;
   const id = detailId;
+  const cur = state.books.find(x => x.id === id);
+  if (!(await askConfirm("Usare questa foto come copertina?", cur && (cur.coverUrl || cur.coverLocal) ? "Sostituirà la copertina attuale." : "", "Usa foto"))) return;
   $("dHint").textContent = "Salvo la foto…"; $("dPicks").innerHTML = "";
   try {
     const blob = await photoToBlob(f);
@@ -816,7 +852,7 @@ $("main").addEventListener("click", e => {
 $("years").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.y === "all" ? "all" : Number(b.dataset.y); render(); });
 let qt; $("q").addEventListener("input", e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value.trim(); if (state.q && state.view !== "all") state.view = "all"; render(); }, 150); });
 $("authorSel").addEventListener("change", e => { state.author = e.target.value; if (state.author) state.view = "all"; render(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape"){ closeForm(); if (!$("detOv").hidden) closeDetail(); $("menuOv").hidden = true; } });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("cfOv").hidden){ $("cfNo").click(); return; } if (e.key === "Escape"){ closeForm(); if (!$("detOv").hidden) closeDetail(); $("menuOv").hidden = true; } });
 
 state.books = loadBooks();
 render();
