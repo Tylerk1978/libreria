@@ -217,13 +217,14 @@ textarea.field{min-height:80px;resize:vertical}
 .rbar{height:8px;background:#140f0b;border-radius:99px;overflow:hidden;margin-top:9px}
 .rbar i{display:block;height:100%;background:linear-gradient(90deg,#b8843f,var(--accent));border-radius:99px}
 .rmeta{color:var(--muted);font-size:12px;margin-top:5px}
-.rcovers{display:flex;gap:14px;overflow-x:auto;padding:8px 2px 4px;scrollbar-width:none}
+.rcovers{display:flex;gap:12px;overflow-x:auto;padding:6px 2px 2px;scrollbar-width:none}
 .rcovers::-webkit-scrollbar{display:none}
-.rcover{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;align-self:flex-start;flex:0 0 auto;width:96px;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;text-align:center;font:inherit}
-.rc-img{display:flex;align-items:flex-end;justify-content:center;width:96px;height:144px;--row:144px;--s:.75}
-.rc-img img{width:96px;height:144px;object-fit:cover;border-radius:3px 5px 5px 3px;box-shadow:0 8px 18px rgba(0,0,0,.55)}
-.rc-img .spine{cursor:pointer}
-.rc-t{display:block;font-size:12px;line-height:1.3;margin-top:8px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.rcover{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;align-self:flex-start;flex:0 0 auto;width:68px;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;text-align:center;font:inherit}
+.rc-img{display:flex;align-items:flex-end;justify-content:center;width:48px;height:72px;--row:72px;--s:.4}
+.rc-img img{width:48px;height:72px;object-fit:cover;border-radius:2px 4px 4px 2px;box-shadow:0 5px 12px rgba(0,0,0,.55)}
+.rc-img .spine{cursor:pointer;padding:0;min-width:16px}
+.rc-img .spine .txt{display:none}
+.rc-t{font-size:11px;line-height:1.25;margin-top:6px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .quick button{background:var(--field);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}
 .miss-list{margin-top:12px}
@@ -444,7 +445,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.21";
+const APP_VERSION = "1.22";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
