@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1712">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Libreria">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<title>La mia libreria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wall:#1c1712; --ink:#f3ead8; --muted:#b5a487; --line:#4a3d2e; --field:#2a221a;
+  --accent:#d9a65a;
+  --row:200px; --plank:16px; --s:1;
+}
+@media (max-width:640px){ :root{ --row:160px; --plank:13px; --s:.8; } }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  min-height:100vh; color:var(--ink); font-family:Inter,system-ui,sans-serif;
+  background:radial-gradient(ellipse at 50% -20%, #3b2e21 0%, transparent 60%), var(--wall);
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit}
+header{max-width:1100px;margin:0 auto;padding:calc(30px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) 6px calc(20px + env(safe-area-inset-left));display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:clamp(32px,7vw,46px);margin:0;line-height:1}
+.sub{color:var(--muted);font-size:14px;margin-top:6px}
+.btn{appearance:none;border:0;border-radius:999px;padding:11px 18px;font-weight:600;font-size:14px;cursor:pointer;background:var(--accent);color:#2a1d0f;white-space:nowrap}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid #5d4c39}
+.btn.danger{background:#9e3a2e;color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+
+.controls{max-width:1100px;margin:0 auto;padding:14px 20px 6px;display:flex;gap:10px;flex-wrap:wrap}
+.field{background:var(--field);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 14px;font:15px Inter,sans-serif;outline:none;width:100%}
+.field:focus{border-color:var(--accent)}
+.controls .search{flex:1 1 240px;position:relative}
+.controls .search input{padding-left:38px}
+.controls .search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.6}
+.controls select{flex:0 1 230px}
+.years{max-width:1100px;margin:0 auto;padding:8px 20px 4px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.years::-webkit-scrollbar{display:none}
+.years button{flex:0 0 auto;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 15px;font-size:14px;font-weight:500;cursor:pointer}
+.years button.on{background:var(--ink);color:#231b13;border-color:var(--ink)}
+.status{max-width:1100px;margin:6px auto 0;padding:0 20px;color:var(--accent);font-size:13px;min-height:0}
+.status:empty{display:none}
+
+main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
+.year-sec{margin-top:24px}
+.year-head{display:flex;align-items:baseline;gap:12px;margin:0 4px 10px}
+.year-head h2{font-family:"Cormorant Garamond",Georgia,serif;font-size:32px;margin:0;font-weight:600}
+.year-head span{color:var(--muted);font-size:14px}
+
+/* Bookcase */
+.case{
+  position:relative;border-radius:6px;padding:14px 16px 0;
+  border:14px solid #5b381f;border-bottom-width:0;
+  border-image:linear-gradient(180deg,#7a4b28,#5b381f 40%,#4a2d18) 14;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.55), transparent 7%, transparent 93%, rgba(0,0,0,.55)),
+    #140f0b;
+  box-shadow:0 20px 40px rgba(0,0,0,.45);
+}
+.case::after{ /* base */
+  content:"";position:absolute;left:-14px;right:-14px;bottom:-18px;height:18px;
+  background:linear-gradient(180deg,#6b4224,#3e2513);border-radius:0 0 4px 4px;
+}
+.shelf{
+  display:flex;flex-wrap:wrap;column-gap:2px;row-gap:var(--plank);
+  padding-bottom:var(--plank);margin:0 -16px;padding-left:16px;padding-right:16px;
+  background-image:
+    repeating-linear-gradient(180deg,
+      transparent 0, transparent var(--row),
+      #a0703f var(--row), #865a32 calc(var(--row) + var(--plank)*.45), #5e3b1f calc(var(--row) + var(--plank))),
+    repeating-linear-gradient(180deg,
+      rgba(0,0,0,.55) 0, rgba(0,0,0,0) 16px, transparent var(--row), transparent calc(var(--row) + var(--plank)));
+  background-position:0 0, 0 calc(var(--row) + var(--plank));
+}
+.slot{height:var(--row);display:flex;align-items:flex-end}
+.empty-row{height:var(--row);display:flex;align-items:center;justify-content:center;width:100%;color:#8e7c62;font-family:"Cormorant Garamond",Georgia,serif;font-style:italic;font-size:20px;text-align:center;padding:0 20px}
+
+/* Spines */
+.spine{
+  position:relative;
+  width:auto;min-width:calc(var(--w) * var(--s) * 1px);
+  padding:0 calc(5px * var(--s));
+  height:calc(var(--row) * var(--hp));
+  background:var(--c);color:var(--t);
+  border-radius:3px 3px 1px 1px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  box-shadow: inset 3px 0 4px rgba(255,255,255,.14), inset -5px 0 7px rgba(0,0,0,.38), 2px 0 3px rgba(0,0,0,.45);
+  transition:transform .2s ease, filter .2s;
+  border:0;
+}
+.spine:hover,.spine:focus-visible{transform:translateY(-7px);filter:brightness(1.08);outline:none}
+.spine .txt{
+  writing-mode:vertical-rl;transform:rotate(180deg);
+  display:block;text-align:center;white-space:normal;
+  max-height:calc(var(--row) * var(--hp) - 30px);
+  line-height:1.12;position:relative;z-index:1;
+}
+.spine .au{display:block;font-size:calc(9px * var(--s) + 1px);letter-spacing:.8px;text-transform:uppercase;opacity:.85;margin-block-end:4px;font-weight:500}
+.spine .ti{display:block;font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:calc(13px * var(--s) + 2px);letter-spacing:.2px}
+.spine.v0::before,.spine.v0::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--g);opacity:.8;box-shadow:0 4px 0 var(--g)}
+.spine.v0::before{top:9px}.spine.v0::after{bottom:15px}
+.spine.v1::before{content:"";position:absolute;left:0;right:0;top:12px;height:18%;background:rgba(0,0,0,.28);border-top:1px solid var(--g);border-bottom:1px solid var(--g)}
+.spine.v2::after{content:"";position:absolute;left:0;right:0;bottom:0;height:12%;background:rgba(0,0,0,.25)}
+.spine.new{animation:drop .7s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes drop{from{transform:translateY(-60px);opacity:0}to{transform:none;opacity:1}}
+
+.nores{color:var(--muted);text-align:center;margin:60px 0;font-family:"Cormorant Garamond",Georgia,serif;font-size:22px;font-style:italic}
+
+/* Overlay / sheet */
+.overlay{position:fixed;inset:0;background:rgba(10,7,4,.7);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}
+.overlay[hidden]{display:none}
+.sheet{background:#231c15;border:1px solid #4a3d2e;border-radius:18px;width:100%;max-width:480px;max-height:calc(100vh - 40px);overflow:auto;padding:22px}
+@media (max-width:640px){
+  .overlay{align-items:flex-end;padding:0}
+  .sheet{border-radius:18px 18px 0 0;max-height:92vh;padding-bottom:calc(22px + env(safe-area-inset-bottom))}
+}
+.sheet h3{font-family:"Cormorant Garamond",Georgia,serif;font-size:28px;font-weight:600;margin:0 0 14px}
+.sheet label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stars{display:flex;gap:4px}
+.stars button{background:none;border:0;font-size:26px;cursor:pointer;color:#5d4c39;padding:0 2px;line-height:1}
+.stars button.on{color:var(--accent)}
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatches button{width:30px;height:30px;border-radius:8px;border:2px solid transparent;cursor:pointer}
+.swatches button.on{border-color:var(--ink)}
+.swatches .auto{width:auto;padding:0 10px;background:var(--field);color:var(--muted);font-size:12px;border:1px solid var(--line)}
+.swatches .auto.on{border:2px solid var(--ink);color:var(--ink)}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.err{color:#e08a7c;font-size:13px;margin-top:10px}
+.err:empty{display:none}
+textarea.field{min-height:80px;resize:vertical}
+.hbtns{display:flex;gap:8px;align-items:center}
+.iconbtn{width:42px;height:42px;border-radius:999px;border:1px solid #5d4c39;background:transparent;color:var(--ink);font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.welcome{max-width:460px;margin:50px auto;text-align:center;background:#231c15;border:1px solid #4a3d2e;border-radius:18px;padding:26px 22px}
+.welcome h2{font-family:"Cormorant Garamond",Georgia,serif;font-size:28px;margin:0 0 8px;font-weight:600}
+.welcome p{color:var(--muted);line-height:1.5;margin:0 0 18px;font-size:15px}
+.welcome .actions{justify-content:center}
+.menu p{color:var(--muted);line-height:1.5;font-size:14px;margin:6px 0 0}
+.menu .item{display:block;width:100%;text-align:left;background:var(--field);border:1px solid var(--line);color:var(--ink);border-radius:14px;padding:14px 16px;margin-top:10px;cursor:pointer;font-size:15px;font-weight:600}
+.menu .item small{display:block;color:var(--muted);font-weight:400;font-size:13px;margin-top:3px}
+.ok{color:#9fc79a;font-size:13px;margin-top:10px}
+.ok:empty{display:none}
+
+.detail .who{color:var(--muted);font-size:16px;margin-top:-6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.chip{background:var(--field);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--muted)}
+.detail .notes{white-space:pre-wrap;line-height:1.5;font-size:15px;background:var(--field);border-radius:12px;padding:12px 14px}
+.detail .st{color:var(--accent);font-size:20px;letter-spacing:2px}
+.mini{display:flex;gap:14px;align-items:flex-start}
+.mini .spine{flex:0 0 auto;cursor:default}
+.mini .spine:hover{transform:none}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>La mia libreria</h1>
+    <div class="sub" id="sub">&nbsp;</div>
+  </div>
+  <div class="hbtns"><button class="iconbtn" id="menuBtn" aria-label="Backup">⋯</button><button class="btn" id="addBtn">+ Aggiungi libro</button></div>
+</header>
+
+<div class="controls">
+  <div class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input class="field" id="q" type="search" placeholder="Cerca per titolo o autore" autocomplete="off">
+  </div>
+  <select class="field" id="authorSel"><option value="">Tutti gli autori</option></select>
+</div>
+<nav class="years" id="years"></nav>
+<div class="status" id="status"></div>
+<main id="main"></main>
+
+<!-- Form -->
+<div class="overlay" id="formOv" hidden>
+  <form class="sheet" id="form" novalidate>
+    <h3 id="formTitle">Nuovo libro</h3>
+    <label for="fTitle">Titolo</label>
+    <input class="field" id="fTitle" required autocomplete="off">
+    <label for="fAuthor">Autore</label>
+    <input class="field" id="fAuthor" list="authorList" required autocomplete="off">
+    <datalist id="authorList"></datalist>
+    <div class="row2">
+      <div>
+        <label for="fYear">Anno di lettura</label>
+        <input class="field" id="fYear" type="number" inputmode="numeric" min="1900" max="2100">
+      </div>
+      <div>
+        <label for="fPages">Pagine (facoltativo)</label>
+        <input class="field" id="fPages" type="number" inputmode="numeric" min="1" max="5000">
+      </div>
+    </div>
+    <label for="fDate">Finito il (facoltativo)</label>
+    <input class="field" id="fDate" type="date">
+    <label>Voto</label>
+    <div class="stars" id="fStars"></div>
+    <label>Colore del dorso</label>
+    <div class="swatches" id="fSw"></div>
+    <label for="fNotes">Note</label>
+    <textarea class="field" id="fNotes"></textarea>
+    <div class="err" id="fErr"></div>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="fCancel">Annulla</button>
+      <button type="submit" class="btn" id="fSave">Metti sullo scaffale</button>
+    </div>
+  </form>
+</div>
+
+<!-- Menu -->
+<div class="overlay" id="menuOv" hidden>
+  <div class="sheet menu" id="menu"></div>
+</div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<!-- Detail -->
+<div class="overlay" id="detOv" hidden>
+  <div class="sheet detail" id="det"></div>
+</div>
+
+<script>
+(() => {
+const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
+const NOW_YEAR = new Date().getFullYear();
+const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
+
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+function hash(s){ let h = 2166136261; for (const ch of s){ h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function lum(hex){ const n = parseInt(hex.slice(1),16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return (0.299*r+0.587*g+0.114*b)/255; }
+function setStatus(t){ $("status").textContent = t || ""; }
+
+function spineHTML(b, extraClass = ""){
+  const h = hash((b.title||"") + "|" + (b.author||""));
+  const color = b.color || PALETTE[h % PALETTE.length];
+  const light = lum(color) > 0.6;
+  const text = light ? "#2a2018" : "#f4ead6";
+  const gold = light ? "#7a5a2a" : "#d8b26a";
+  const pages = Number(b.pages) || 0;
+  const w = pages ? Math.max(22, Math.min(60, 16 + pages / 14)) : 26 + (h >> 4) % 16;
+  const hp = (0.80 + ((h >> 9) % 17) / 100).toFixed(2);
+  const v = (h >> 13) % 3;
+  return `<button class="spine v${v} ${extraClass}" data-id="${esc(b.id)}" title="${esc(b.title)} — ${esc(b.author)}"
+    style="--c:${color};--t:${text};--g:${gold};--w:${w.toFixed(0)};--hp:${hp}">
+    <span class="txt"><span class="au">${esc(b.author)}</span><span class="ti">${esc(b.title)}</span></span></button>`;
+}
+
+function sortKey(b){ return (b.finished || String(b.createdAt || "").slice(0,10)) + "|" + (b.createdAt || ""); }
+function matches(b){
+  if (state.author && b.author !== state.author) return false;
+  if (state.q){ const q = norm(state.q); if (!norm(b.title).includes(q) && !norm(b.author).includes(q)) return false; }
+  return true;
+}
+
+function render(){
+  const books = state.books;
+  const years = [...new Set([NOW_YEAR, ...books.map(b => Number(b.year)).filter(Boolean)])].sort((a,b) => b-a);
+  if (state.view !== "all" && !years.includes(state.view)) state.view = NOW_YEAR;
+
+  // subtitle
+  const thisYear = books.filter(b => Number(b.year) === NOW_YEAR).length;
+  $("sub").textContent = books.length
+    ? `${books.length} ${books.length === 1 ? "libro letto" : "libri letti"} · ${thisYear} nel ${NOW_YEAR}`
+    : "Lo scaffale ti aspetta";
+
+  // year tabs
+  $("years").innerHTML = `<button data-y="all" class="${state.view==="all"?"on":""}">Tutti</button>` +
+    years.map(y => `<button data-y="${y}" class="${state.view===y?"on":""}">${y}</button>`).join("");
+
+  // authors
+  const authors = [...new Set(books.map(b => b.author).filter(Boolean))].sort((a,b) => a.localeCompare(b, "it"));
+  const sel = $("authorSel");
+  if (state.author && !authors.includes(state.author)) state.author = "";
+  sel.innerHTML = `<option value="">Tutti gli autori</option>` + authors.map(a => `<option ${a===state.author?"selected":""}>${esc(a)}</option>`).join("");
+  $("authorList").innerHTML = authors.map(a => `<option value="${esc(a)}">`).join("");
+
+  // shelves
+  const filtering = !!(state.q || state.author);
+  const shown = state.view === "all" ? years : [state.view];
+  let html = "", total = 0;
+  for (const y of shown){
+    const list = books.filter(b => Number(b.year) === y && matches(b)).sort((a,b) => sortKey(a).localeCompare(sortKey(b)));
+    total += list.length;
+    if (!list.length && (filtering || state.view === "all")) continue;
+    const n = books.filter(b => Number(b.year) === y).length;
+    const label = filtering ? `${list.length} di ${n}` : `${n} ${n===1?"libro":"libri"}`;
+    html += `<section class="year-sec"><div class="year-head"><h2>${y}</h2><span>${label}</span></div>
+      <div class="case"><div class="shelf">` +
+      (list.length
+        ? list.map(b => `<div class="slot">${spineHTML(b, b.id === state.newId ? "new" : "")}</div>`).join("")
+        : `<div class="empty-row">Nessun libro ancora: aggiungi il primo del ${y}</div>`) +
+      `</div></div></section>`;
+  }
+  if (!books.length){
+    html = `<div class="welcome"><h2>Benvenuto nella tua libreria</h2>
+      <p>Aggiungi il primo libro letto, oppure importa un backup per ritrovare tutta la tua libreria.</p>
+      <div class="actions"><button class="btn ghost" id="wImport">Importa backup</button><button class="btn" id="wAdd">Aggiungi libro</button></div></div>`;
+  } else if (!html){
+    html = filtering ? `<p class="nores">Nessun libro corrisponde alla ricerca</p>`
+                     : `<p class="nores">Nessun libro sugli scaffali</p>`;
+  }
+  $("main").innerHTML = html;
+  state.newId = null;
+}
+
+/* ---------- Data (salvati sul dispositivo) ---------- */
+const KEY = "libreria.books.v1";
+function loadBooks(){
+  try { const v = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(v) ? v : []; } catch(e){ return []; }
+}
+function persist(){
+  try { localStorage.setItem(KEY, JSON.stringify(state.books)); return true; }
+  catch(e){ throw { code: "storage" }; }
+}
+async function writeBook(data, id){
+  const now = new Date().toISOString();
+  if (id){ const i = state.books.findIndex(b => b.id === id); state.books[i] = { id, ...data, updatedAt: now }; }
+  else {
+    const nid = "b" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    state.newId = nid; state.books.push({ id: nid, ...data, updatedAt: now });
+  }
+  persist(); render();
+}
+async function removeBook(id){ state.books = state.books.filter(b => b.id !== id); persist(); render(); }
+function errText(e){
+  if (e && e.code === "storage") return "Non riesco a salvare sul dispositivo (memoria piena o navigazione privata).";
+  return "Salvataggio non riuscito, riprova.";
+}
+
+/* ---------- Backup ---------- */
+function backupName(){ return "libreria-backup-" + new Date().toISOString().slice(0,10) + ".json"; }
+async function exportBackup(){
+  const payload = JSON.stringify({ app: "libreria", version: 1, exportedAt: new Date().toISOString(), books: state.books }, null, 1);
+  const name = backupName();
+  const file = new File([payload], name, { type: "application/json" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })){
+      await navigator.share({ files: [file], title: "Backup libreria" });
+      return "Backup pronto: salvalo su File, iCloud Drive o mandalo con AirDrop.";
+    }
+  } catch(e){ if (e && e.name === "AbortError") return ""; }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a"); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return "Backup scaricato (" + name + ").";
+}
+function parseBackup(text){
+  let data; try { data = JSON.parse(text); } catch(e){ throw new Error("Il file non è un backup valido."); }
+  const list = Array.isArray(data) ? data : data && data.books;
+  if (!Array.isArray(list)) throw new Error("Il file non contiene una libreria.");
+  const out = [];
+  for (const b of list){
+    if (!b || typeof b.title !== "string" || typeof b.author !== "string") continue;
+    const year = parseInt(b.year, 10); if (!year) continue;
+    out.push({
+      id: String(b.id || ("b" + Math.random().toString(36).slice(2,10))),
+      title: b.title.trim(), author: b.author.trim(), year,
+      pages: parseInt(b.pages, 10) || null, finished: typeof b.finished === "string" ? b.finished : null,
+      rating: Number(b.rating) || null, color: typeof b.color === "string" && /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : null,
+      notes: typeof b.notes === "string" ? b.notes : null,
+      createdAt: typeof b.createdAt === "string" ? b.createdAt : new Date().toISOString(),
+      updatedAt: typeof b.updatedAt === "string" ? b.updatedAt : null,
+    });
+  }
+  if (!out.length) throw new Error("Nel file non ho trovato libri.");
+  return out;
+}
+function openMenu(msg){
+  const n = state.books.length;
+  $("menu").innerHTML = `
+    <h3>Backup</h3>
+    <p>I libri sono salvati su questo dispositivo e funzionano anche offline. Per portarli su un altro dispositivo, esporta un backup e importalo lì.</p>
+    <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json</small></button>
+    <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
+    <div class="ok" id="mOk">${esc(msg || "")}</div>
+    <div class="err" id="mErr"></div>
+    <div class="actions"><button class="btn ghost" id="mClose">Chiudi</button></div>`;
+  $("menuOv").hidden = false;
+  $("mClose").onclick = () => $("menuOv").hidden = true;
+  $("mExport").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportBackup(); };
+  $("mImport").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
+}
+$("importFile").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  if ($("menuOv").hidden) openMenu();
+  let books;
+  try { books = parseBackup(await f.text()); }
+  catch(err){ $("mErr").textContent = err.message; return; }
+  const cur = state.books.length;
+  if (!cur){ applyImport(books); return; }
+  $("menu").innerHTML = `
+    <h3>Importa backup</h3>
+    <p>Il file contiene <b>${books.length}</b> libri. Sostituisco i <b>${cur}</b> libri attualmente su questo dispositivo?</p>
+    <div class="actions">
+      <button class="btn ghost" id="iNo">Annulla</button>
+      <button class="btn danger" id="iYes">Sostituisci</button>
+    </div>`;
+  $("iNo").onclick = () => openMenu();
+  $("iYes").onclick = () => applyImport(books);
+});
+function applyImport(books){
+  const prev = state.books;
+  state.books = books;
+  try { persist(); } catch(e){ state.books = prev; openMenu(); $("mErr").textContent = errText(e); return; }
+  state.view = "all"; state.q = ""; state.author = ""; $("q").value = "";
+  render();
+  openMenu(`Importati ${books.length} libri.`);
+}
+$("menuOv").addEventListener("click", e => { if (e.target.id === "menuOv") $("menuOv").hidden = true; });
+$("menuBtn").addEventListener("click", () => openMenu());
+
+/* ---------- Form ---------- */
+function drawStars(){
+  $("fStars").innerHTML = [1,2,3,4,5].map(i => `<button type="button" data-r="${i}" class="${i<=state.rating?"on":""}" aria-label="${i} stelle">★</button>`).join("");
+}
+function drawSwatches(){
+  $("fSw").innerHTML = `<button type="button" class="auto ${!state.color?"on":""}" data-c="">Auto</button>` +
+    PALETTE.map(c => `<button type="button" data-c="${c}" class="${state.color===c?"on":""}" style="background:${c}" aria-label="colore"></button>`).join("");
+}
+function openForm(book){
+  state.editing = book ? book.id : null;
+  $("formTitle").textContent = book ? "Modifica libro" : "Nuovo libro";
+  $("fSave").textContent = book ? "Salva" : "Metti sullo scaffale";
+  $("fTitle").value = book?.title || "";
+  $("fAuthor").value = book?.author || (state.author || "");
+  $("fYear").value = book?.year || (state.view === "all" ? NOW_YEAR : state.view);
+  $("fPages").value = book?.pages || "";
+  $("fDate").value = book?.finished || "";
+  $("fNotes").value = book?.notes || "";
+  state.rating = book?.rating || 0;
+  state.color = book?.color || "";
+  $("fErr").textContent = "";
+  drawStars(); drawSwatches();
+  $("detOv").hidden = true;
+  $("formOv").hidden = false;
+  setTimeout(() => $("fTitle").focus(), 50);
+}
+function closeForm(){ $("formOv").hidden = true; }
+
+$("fDate").addEventListener("change", e => { if (e.target.value) $("fYear").value = e.target.value.slice(0,4); });
+$("fStars").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const r = Number(b.dataset.r); state.rating = state.rating === r ? 0 : r; drawStars(); });
+$("fSw").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.color = b.dataset.c; drawSwatches(); });
+$("fCancel").addEventListener("click", closeForm);
+$("formOv").addEventListener("click", e => { if (e.target.id === "formOv") closeForm(); });
+
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const title = $("fTitle").value.trim(), author = $("fAuthor").value.trim();
+  const year = parseInt($("fYear").value, 10);
+  if (!title || !author){ $("fErr").textContent = "Titolo e autore sono obbligatori."; return; }
+  if (!year || year < 1900 || year > 2100){ $("fErr").textContent = "Inserisci un anno di lettura valido."; return; }
+  const prev = state.editing ? state.books.find(b => b.id === state.editing) : null;
+  const data = {
+    title, author, year,
+    pages: parseInt($("fPages").value, 10) || null,
+    finished: $("fDate").value || null,
+    rating: state.rating || null,
+    color: state.color || null,
+    notes: $("fNotes").value.trim() || null,
+    createdAt: prev?.createdAt || new Date().toISOString(),
+  };
+  const btn = $("fSave"); btn.disabled = true;
+  try {
+    await writeBook(data, state.editing);
+    if (state.view !== "all" && state.view !== year) state.view = year;
+    closeForm(); render();
+  } catch(err){ $("fErr").textContent = errText(err); }
+  finally { btn.disabled = false; }
+});
+
+/* ---------- Detail ---------- */
+function fmtDate(d){ try { return new Date(d + "T12:00:00").toLocaleDateString("it-IT", { day:"numeric", month:"long", year:"numeric" }); } catch(e){ return d; } }
+function openDetail(id){
+  const b = state.books.find(x => x.id === id); if (!b) return;
+  const chips = [`Letto nel ${b.year}`];
+  if (b.finished) chips.push(`Finito il ${fmtDate(b.finished)}`);
+  if (b.pages) chips.push(`${b.pages} pagine`);
+  $("det").innerHTML = `
+    <div class="mini">
+      <div style="--row:150px;--s:1">${spineHTML(b)}</div>
+      <div style="min-width:0">
+        <h3 style="margin-bottom:10px">${esc(b.title)}</h3>
+        <div class="who">${esc(b.author)}</div>
+        ${b.rating ? `<div class="st" style="margin-top:8px">${"★".repeat(b.rating)}<span style="color:#5d4c39">${"★".repeat(5-b.rating)}</span></div>` : ""}
+      </div>
+    </div>
+    <div class="chips">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+    ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
+    <div class="err" id="dErr"></div>
+    <div class="actions">
+      <button class="btn ghost" id="dDel">Elimina</button>
+      <button class="btn ghost" id="dClose">Chiudi</button>
+      <button class="btn" id="dEdit">Modifica</button>
+    </div>`;
+  $("detOv").hidden = false;
+  $("dClose").onclick = () => $("detOv").hidden = true;
+  $("dEdit").onclick = () => openForm(b);
+  let armed = false;
+  $("dDel").onclick = async () => {
+    if (!armed){ armed = true; $("dDel").textContent = "Conferma eliminazione"; $("dDel").className = "btn danger"; return; }
+    try { await removeBook(b.id); $("detOv").hidden = true; } catch(err){ $("dErr").textContent = errText(err); }
+  };
+}
+$("detOv").addEventListener("click", e => { if (e.target.id === "detOv") $("detOv").hidden = true; });
+
+/* ---------- Events ---------- */
+$("addBtn").addEventListener("click", () => openForm(null));
+$("main").addEventListener("click", e => {
+  if (e.target.id === "wAdd") return openForm(null);
+  if (e.target.id === "wImport"){ $("importFile").value = ""; return $("importFile").click(); }
+  const s = e.target.closest(".spine"); if (s) openDetail(s.dataset.id);
+});
+$("years").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.y === "all" ? "all" : Number(b.dataset.y); render(); });
+let qt; $("q").addEventListener("input", e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value.trim(); if (state.q && state.view !== "all") state.view = "all"; render(); }, 150); });
+$("authorSel").addEventListener("change", e => { state.author = e.target.value; if (state.author) state.view = "all"; render(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape"){ closeForm(); $("detOv").hidden = true; $("menuOv").hidden = true; } });
+
+state.books = loadBooks();
+render();
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
+if ("serviceWorker" in navigator && location.protocol !== "file:"){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+})();
+</script>
+</body>
+</html>
