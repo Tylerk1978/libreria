@@ -415,7 +415,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.17";
+const APP_VERSION = "1.18";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
@@ -1458,11 +1458,11 @@ function openDetail(id){
     </div>
     <div class="hint" id="dHint"></div>
     <div class="picks" id="dPicks"></div>
-    <label for="dNotes">Note e riassunto</label>
-    <textarea class="field notesarea" id="dNotes" placeholder="Riassunto, cosa ti è piaciuto, a chi lo consiglieresti…">${esc(b.notes || "")}</textarea>
+    <label for="dNotes">Trama</label>
+    <textarea class="field notesarea" id="dNotes" placeholder="Di cosa parla il libro…">${esc(b.notes || "")}</textarea>
     <div class="saved" id="dSavedNotes"></div>
-    <label for="dQuotes">Citazioni</label>
-    <textarea class="field notesarea quotesarea" id="dQuotes" rows="2" placeholder="Le frasi che vuoi ricordare…">${esc(b.quotes || "")}</textarea>
+    <label for="dQuotes">L'autore</label>
+    <textarea class="field notesarea quotesarea" id="dQuotes" rows="2" placeholder="Chi è, altre opere, curiosità…">${esc(b.quotes || "")}</textarea>
     <div class="saved" id="dSavedQuotes"></div>
     <div class="err" id="dErr"></div>
     <div class="actions">
@@ -1515,7 +1515,7 @@ function openDetail(id){
   $("dEdit").onclick = () => { flushNotes(); openForm(state.books.find(x => x.id === id)); };
   $("dDel").onclick = async () => {
     const cur = state.books.find(x => x.id === id);
-    if (!(await askConfirm("Eliminare il libro?", `«${cur ? cur.title : ""}» verrà tolto dalla libreria, con copertina, note e citazioni.`, "Elimina", true))) return;
+    if (!(await askConfirm("Eliminare il libro?", `«${cur ? cur.title : ""}» verrà tolto dalla libreria, con copertina, trama e note sull'autore.`, "Elimina", true))) return;
     try { notesTimer && clearTimeout(notesTimer); notesTimer = null; await removeBook(id); closeDetail(); } catch(err){ $("dErr").textContent = errText(err); }
   };
 }
