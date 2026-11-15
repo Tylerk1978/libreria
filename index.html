@@ -429,28 +429,41 @@ async function photoToBlob(file){
     return await new Promise(res => c.toBlob(res, "image/jpeg", 0.85));
   } finally { URL.revokeObjectURL(url); }
 }
+let googleBusyUntil = 0;
 async function searchCovers(b){
   const out = [];
   const add = u => { if (u && !out.includes(u)) out.push(u); };
-  const title = b.title.length > 40 ? b.title.split(/[.:]/)[0] : b.title;
+  const title = b.title.length > 40 ? b.title.split(/[.:]/)[0].trim() : b.title;
   const author = b.author.split(",")[0].trim();
-  const google = async lang => {
-    const q = `intitle:${title} inauthor:${author}`;
-    const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=12&printType=books${lang ? "&langRestrict=it" : ""}`);
-    if (!r.ok) return;
-    const j = await r.json();
-    for (const it of j.items || []){
+  const getJSON = async url => { const r = await fetch(url); if (r.status === 429) { googleBusyUntil = Date.now() + 20000; return null; } if (!r.ok) return null; return r.json(); };
+
+  // 1) Apple Books (negozio italiano): copertine delle edizioni italiane
+  const apple = async term => {
+    const j = await getJSON(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=ebook&entity=ebook&country=it&limit=10`);
+    for (const r of (j && j.results) || []){
+      if (r.artworkUrl100) add(r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/400x600bb."));
+    }
+  };
+  try { await apple(`${title} ${author}`); } catch(e){}
+  if (!out.length) try { await apple(title); } catch(e){}
+
+  // 2) Google Books
+  const google = async (q, lang) => {
+    if (Date.now() < googleBusyUntil) return;
+    const j = await getJSON(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10&printType=books${lang ? "&langRestrict=it" : ""}`);
+    for (const it of (j && j.items) || []){
       const im = it.volumeInfo && it.volumeInfo.imageLinks;
       const t = im && (im.thumbnail || im.smallThumbnail);
       if (t) add(t.replace(/^http:/, "https:").replace("&edge=curl", ""));
     }
   };
-  try { await google(true); } catch(e){}
-  if (out.length < 4) try { await google(false); } catch(e){}
-  if (out.length < 4) try {
-    const r = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=10&fields=cover_i`);
-    const j = await r.json();
-    for (const d of j.docs || []) if (d.cover_i) add(`https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg`);
+  if (out.length < 6) try { await google(`intitle:${title} inauthor:${author}`, true); } catch(e){}
+  if (out.length < 3) try { await google(`${title} ${author}`, false); } catch(e){}
+
+  // 3) Open Library
+  if (out.length < 3) try {
+    const j = await getJSON(`https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=10&fields=cover_i`);
+    for (const d of (j && j.docs) || []) if (d.cover_i) add(`https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg`);
   } catch(e){}
   return out.slice(0, 9);
 }
@@ -544,7 +557,7 @@ async function bulkCovers(){
     done++;
     const p = document.getElementById("bProg");
     if (p) p.textContent = `${done} di ${todo.length} · trovate ${found}`;
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 900));
   }
   const p = document.getElementById("bProg");
   if (p) p.textContent = `Fatto: trovate ${found} copertine su ${done} libri${bulkStop ? " (interrotto)" : ""}.`;
