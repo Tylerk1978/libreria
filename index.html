@@ -104,7 +104,7 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
 .spine .txt{
   writing-mode:vertical-rl;transform:rotate(180deg);
   display:block;text-align:center;white-space:normal;
-  max-height:calc(var(--row) * var(--hp) - 30px);
+  max-height:100%;
   line-height:1.12;position:relative;z-index:1;
 }
 .spine .au{display:block;font-size:calc(8px * var(--s) + 1px);letter-spacing:.7px;text-transform:uppercase;opacity:.85;margin-block-end:4px;font-weight:500}
@@ -113,6 +113,10 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
 .spine.v0::before{top:9px}.spine.v0::after{bottom:15px}
 .spine.v1::before{content:"";position:absolute;left:0;right:0;top:12px;height:18%;background:rgba(0,0,0,.28);border-top:1px solid var(--g);border-bottom:1px solid var(--g)}
 .spine.v2::after{content:"";position:absolute;left:0;right:0;bottom:0;height:12%;background:rgba(0,0,0,.25)}
+/* spazio riservato alle decorazioni, così le scritte non ci finiscono sopra */
+.spine.v0{padding-top:21px;padding-bottom:23px}
+.spine.v1{padding-top:calc(var(--row) * var(--hp) * .18 + 19px);padding-bottom:10px}
+.spine.v2{padding-top:10px;padding-bottom:calc(var(--row) * var(--hp) * .12 + 6px)}
 .spine.new{animation:drop .7s cubic-bezier(.2,.9,.3,1.2)}
 @keyframes drop{from{transform:translateY(-60px);opacity:0}to{transform:none;opacity:1}}
 
@@ -411,7 +415,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.16";
+const APP_VERSION = "1.17";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
