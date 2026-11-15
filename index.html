@@ -258,6 +258,7 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
 
 <script>
 (() => {
+const APP_VERSION = "1.5";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
@@ -577,7 +578,8 @@ function openMenu(msg){
     <button class="item" id="mCovers">Cerca le copertine mancanti<small>${state.books.filter(b => !b.coverUrl && !b.coverLocal).length} libri senza copertina · serve internet</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
     <div class="err" id="mErr"></div>
-    <div class="actions"><button class="btn ghost" id="mClose">Chiudi</button></div>`;
+    <div class="actions"><button class="btn ghost" id="mClose">Chiudi</button></div>
+    <p style="text-align:center;font-size:12px;margin-top:14px">Versione ${APP_VERSION}</p>`;
   $("menuOv").hidden = false;
   $("mClose").onclick = () => $("menuOv").hidden = true;
   $("mExport").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportBackup(); };

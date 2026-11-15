@@ -1,5 +1,5 @@
 // Service worker: rende "La mia libreria" utilizzabile offline.
-const CACHE = "libreria-v3";
+const CACHE = "libreria-v4";
 const COVERS = "libreria-covers";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 const COVER_HOSTS = ["mzstatic.com", "books.google.com", "books.googleusercontent.com", "covers.openlibrary.org", "archive.org"];
@@ -42,10 +42,27 @@ self.addEventListener("fetch", e => {
 
   if (url.origin !== location.origin) return;
 
-  // App: risposta immediata dalla cache, aggiornamento in background quando c'è rete.
+  // Pagina dell'app: prima la rete (così gli aggiornamenti arrivano subito), la cache se offline.
+  if (req.mode === "navigate" || url.pathname.endsWith("/index.html")) {
+    e.respondWith((async () => {
+      const c = await caches.open(CACHE);
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch(req, { signal: ctrl.signal, cache: "no-store" });
+        clearTimeout(t);
+        if (res && res.ok) { c.put("index.html", res.clone()); return res; }
+        throw 0;
+      } catch (err) {
+        return (await c.match("index.html")) || (await c.match("./")) || new Response("Offline", { status: 503 });
+      }
+    })());
+    return;
+  }
+
+  // Altri file dell'app: dalla cache, aggiornati in background.
   e.respondWith(caches.open(CACHE).then(async c => {
-    const hit = await c.match(req, { ignoreSearch: true }) ||
-                (req.mode === "navigate" ? await c.match("index.html") : undefined);
+    const hit = await c.match(req, { ignoreSearch: true });
     const net = fetch(req).then(res => { if (res && res.ok) c.put(req, res.clone()); return res; }).catch(() => undefined);
     return hit || (await net) || new Response("Offline", { status: 503 });
   }));
