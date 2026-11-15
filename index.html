@@ -161,7 +161,9 @@ textarea.field{min-height:80px;resize:vertical}
 .mini{display:flex;gap:16px;align-items:flex-start}
 .cover{width:120px;flex:0 0 auto;border-radius:4px 6px 6px 4px;box-shadow:0 8px 20px rgba(0,0,0,.5), inset 3px 0 0 rgba(255,255,255,.08);display:block;background:#2a221a;object-fit:cover;aspect-ratio:2/3}
 @media (min-width:641px){ .cover{width:140px} }
-.coveracts{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.coveracts{display:flex;flex-wrap:nowrap;gap:6px;margin:14px 0 4px}
+.coveracts .btn{flex:1 1 0;min-width:0;padding:8px 4px;font-size:12px;text-align:center;overflow:hidden;text-overflow:ellipsis}
+.coveracts .btn[hidden]{display:none}
 .btn.small{padding:8px 13px;font-size:13px}
 .picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:10px;margin-top:10px}
 .picks button{padding:0;border:2px solid transparent;border-radius:6px;background:#2a221a;cursor:pointer;aspect-ratio:2/3;overflow:hidden}
@@ -203,6 +205,8 @@ textarea.notesarea{min-height:200px;font-size:13px;line-height:1.55;text-align:j
     <input class="field" id="fTitle" required autocomplete="off">
     <label for="fAuthor">Autore</label>
     <input class="field" id="fAuthor" list="authorList" required autocomplete="off">
+    <label for="fAuthorSort">Nell'elenco autori (cognome e nome)</label>
+    <input class="field" id="fAuthorSort" autocomplete="off">
     <datalist id="authorList"></datalist>
     <div class="row2">
       <div>
@@ -269,6 +273,19 @@ function spineHTML(b, extraClass = ""){
     <span class="txt"><span class="au">${esc(b.author)}</span><span class="ti">${esc(b.title)}</span></span></button>`;
 }
 
+const PARTICLES = new Set(["de","di","da","del","della","dello","dei","degli","dal","dalla","lo","la","le","van","von","der","den","du","des","dos","mac"]);
+const ARTICLES = new Set(["gli","i","il","la","le","lo","the","l'"]);
+// Nomi già scritti con il cognome per primo (uso orientale)
+const SURNAME_FIRST = new Set(["kashiwai hisashi","murata sayaka","hu anyan"]);
+function flipName(name){
+  if (SURNAME_FIRST.has(name.trim().toLowerCase())) return name.trim();
+  const w = name.trim().split(/\s+/);
+  if (w.length < 2 || ARTICLES.has(w[0].toLowerCase())) return name.trim();
+  let i = w.length - 1;
+  while (i > 1 && PARTICLES.has(w[i-1].toLowerCase())) i--;
+  return w.slice(i).join(" ") + " " + w.slice(0, i).join(" ");
+}
+function authorLabel(a){ return String(a || "").split(",").map(flipName).filter(Boolean).join(", "); }
 function sortKey(b){ return (b.finished || String(b.createdAt || "").slice(0,10)) + "|" + (b.createdAt || ""); }
 function matches(b){
   if (state.author && b.author !== state.author) return false;
@@ -292,10 +309,12 @@ function render(){
     years.map(y => `<button data-y="${y}" class="${state.view===y?"on":""}">${y}</button>`).join("");
 
   // authors
-  const authors = [...new Set(books.map(b => b.author).filter(Boolean))].sort((a,b) => a.localeCompare(b, "it"));
+  const labels = {};
+  for (const b of books){ if (b.author && (!labels[b.author] || b.authorSort)) labels[b.author] = b.authorSort || labels[b.author] || authorLabel(b.author); }
+  const authors = Object.keys(labels).sort((a,b) => labels[a].localeCompare(labels[b], "it"));
   const sel = $("authorSel");
   if (state.author && !authors.includes(state.author)) state.author = "";
-  sel.innerHTML = `<option value="">Tutti gli autori</option>` + authors.map(a => `<option ${a===state.author?"selected":""}>${esc(a)}</option>`).join("");
+  sel.innerHTML = `<option value="">Tutti gli autori</option>` + authors.map(a => `<option value="${esc(a)}" ${a===state.author?"selected":""}>${esc(labels[a])}</option>`).join("");
   $("authorList").innerHTML = authors.map(a => `<option value="${esc(a)}">`).join("");
 
   // shelves
@@ -511,6 +530,8 @@ function parseBackup(text){
       pages: parseInt(b.pages, 10) || null, finished: typeof b.finished === "string" ? b.finished : null,
       rating: Number(b.rating) || null, color: typeof b.color === "string" && /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : null,
       notes: typeof b.notes === "string" ? b.notes : null,
+      quotes: typeof b.quotes === "string" ? b.quotes : null,
+      authorSort: typeof b.authorSort === "string" && b.authorSort.trim() ? b.authorSort.trim() : null,
       coverUrl: typeof b.coverUrl === "string" && /^https:\/\//.test(b.coverUrl) ? b.coverUrl : null,
       coverLocal: false,
       coverData: typeof b.coverData === "string" && /^data:image\//.test(b.coverData) ? b.coverData : null,
@@ -615,6 +636,8 @@ function openForm(book){
   $("fSave").textContent = book ? "Salva" : "Metti sullo scaffale";
   $("fTitle").value = book?.title || "";
   $("fAuthor").value = book?.author || (state.author || "");
+  $("fAuthorSort").value = book?.authorSort || authorLabel($("fAuthor").value);
+  sortTouched = !!book?.authorSort;
   $("fYear").value = book?.year || (state.view === "all" ? NOW_YEAR : state.view);
   $("fPages").value = book?.pages || "";
   $("fDate").value = book?.finished || "";
@@ -628,6 +651,9 @@ function openForm(book){
 }
 function closeForm(){ $("formOv").hidden = true; }
 
+let sortTouched = false;
+$("fAuthor").addEventListener("input", () => { if (!sortTouched) $("fAuthorSort").value = authorLabel($("fAuthor").value); });
+$("fAuthorSort").addEventListener("input", () => { sortTouched = true; });
 $("fDate").addEventListener("change", e => { if (e.target.value) $("fYear").value = e.target.value.slice(0,4); });
 $("fStars").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const r = Number(b.dataset.r); state.rating = state.rating === r ? 0 : r; drawStars(); });
 $("fSw").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.color = b.dataset.c; drawSwatches(); });
@@ -643,11 +669,13 @@ $("form").addEventListener("submit", async e => {
   const prev = state.editing ? state.books.find(b => b.id === state.editing) : null;
   const data = {
     title, author, year,
+    authorSort: (() => { const v = $("fAuthorSort").value.trim(); return v && v !== authorLabel(author) ? v : null; })(),
     pages: parseInt($("fPages").value, 10) || null,
     finished: $("fDate").value || null,
     rating: state.rating || null,
     color: state.color || null,
     notes: prev?.notes || null,
+    quotes: prev?.quotes || null,
     coverUrl: prev?.coverUrl || null,
     coverLocal: prev?.coverLocal || false,
     createdAt: prev?.createdAt || new Date().toISOString(),
@@ -664,11 +692,15 @@ $("form").addEventListener("submit", async e => {
 /* ---------- Detail ---------- */
 function fmtDate(d){ try { return new Date(d + "T12:00:00").toLocaleDateString("it-IT", { day:"numeric", month:"long", year:"numeric" }); } catch(e){ return d; } }
 let detailId = null, notesTimer = null;
+function saveTexts(id){
+  const n = document.getElementById("dNotes"), q = document.getElementById("dQuotes");
+  if (!n || !q) return;
+  updateBook(id, { notes: n.value.trim() || null, quotes: q.value.trim() || null });
+}
 function flushNotes(){
   if (!notesTimer) return;
   clearTimeout(notesTimer); notesTimer = null;
-  const ta = document.getElementById("dNotes");
-  if (ta && detailId){ try { updateBook(detailId, { notes: ta.value.trim() || null }); } catch(e){} }
+  if (detailId){ try { saveTexts(detailId); } catch(e){} }
 }
 function closeDetail(){ flushNotes(); $("detOv").hidden = true; detailId = null; }
 async function drawCover(b){
@@ -700,15 +732,18 @@ function openDetail(id){
       </div>
     </div>
     <div class="coveracts">
-      <button class="btn ghost small" id="dSearch">Cerca copertina</button>
+      <button class="btn ghost small" id="dSearch">Cerca online</button>
       <button class="btn ghost small" id="dPhoto">Usa una foto</button>
-      <button class="btn ghost small" id="dRemove" hidden>Togli copertina</button>
+      <button class="btn ghost small" id="dRemove" hidden>Togli</button>
     </div>
     <div class="hint" id="dHint"></div>
     <div class="picks" id="dPicks"></div>
     <label for="dNotes">Note e riassunto</label>
-    <textarea class="field notesarea" id="dNotes" placeholder="Riassunto, citazioni, cosa ti è piaciuto, a chi lo consiglieresti…">${esc(b.notes || "")}</textarea>
-    <div class="saved" id="dSaved"></div>
+    <textarea class="field notesarea" id="dNotes" placeholder="Riassunto, cosa ti è piaciuto, a chi lo consiglieresti…">${esc(b.notes || "")}</textarea>
+    <div class="saved" id="dSavedNotes"></div>
+    <label for="dQuotes">Citazioni</label>
+    <textarea class="field notesarea" id="dQuotes" placeholder="Le frasi che vuoi ricordare…">${esc(b.quotes || "")}</textarea>
+    <div class="saved" id="dSavedQuotes"></div>
     <div class="err" id="dErr"></div>
     <div class="actions">
       <button class="btn ghost" id="dDel">Elimina</button>
@@ -718,16 +753,18 @@ function openDetail(id){
   $("detOv").hidden = false;
   drawCover(b);
 
-  $("dNotes").addEventListener("input", () => {
-    $("dSaved").textContent = "";
-    clearTimeout(notesTimer);
-    notesTimer = setTimeout(() => {
-      notesTimer = null;
-      try { updateBook(id, { notes: $("dNotes").value.trim() || null }); $("dSaved").textContent = "Salvato"; }
-      catch(e){ $("dErr").textContent = errText(e); }
-    }, 600);
-  });
-  $("dNotes").addEventListener("blur", flushNotes);
+  for (const [elId, field, savedId] of [["dNotes","notes","dSavedNotes"],["dQuotes","quotes","dSavedQuotes"]]){
+    $(elId).addEventListener("input", () => {
+      $(savedId).textContent = "";
+      clearTimeout(notesTimer);
+      notesTimer = setTimeout(() => {
+        notesTimer = null;
+        try { saveTexts(id); $(savedId).textContent = "Salvato"; }
+        catch(e){ $("dErr").textContent = errText(e); }
+      }, 600);
+    });
+    $(elId).addEventListener("blur", flushNotes);
+  }
 
   $("dSearch").onclick = async () => {
     $("dHint").textContent = ""; $("dPicks").innerHTML = "";
