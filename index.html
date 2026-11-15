@@ -108,7 +108,7 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
   line-height:1.12;position:relative;z-index:1;
 }
 .spine .au{display:block;font-size:calc(8px * var(--s) + 1px);letter-spacing:.7px;text-transform:uppercase;opacity:.85;margin-block-end:4px;font-weight:500}
-.spine .ti{display:block;font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:calc(11px * var(--s) + 1.5px);letter-spacing:.2px}
+.spine .ti{display:block;font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:calc(9.5px * var(--s) + 1px);letter-spacing:.2px}
 .spine.v0::before,.spine.v0::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--g);opacity:.8;box-shadow:0 4px 0 var(--g)}
 .spine.v0::before{top:9px}.spine.v0::after{bottom:15px}
 .spine.v1::before{content:"";position:absolute;left:0;right:0;top:12px;height:18%;background:rgba(0,0,0,.28);border-top:1px solid var(--g);border-bottom:1px solid var(--g)}
@@ -411,7 +411,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.15";
+const APP_VERSION = "1.16";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
