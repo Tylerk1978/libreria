@@ -46,6 +46,7 @@ h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:clam
 .controls .search input{padding-left:38px}
 .controls .search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.6}
 .controls select{flex:0 1 230px}
+.controls select[hidden]{display:none}
 .years{max-width:1100px;margin:0 auto;padding:8px 20px 4px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
 .years::-webkit-scrollbar{display:none}
 .years button{flex:0 0 auto;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 15px;font-size:14px;font-weight:500;cursor:pointer}
@@ -148,6 +149,10 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
 .spinecfg-prev .spine{cursor:default}
 .spinecfg-prev .spine:hover{transform:none}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
+.tagpick{display:flex;flex-wrap:wrap;gap:6px}
+.tagpick button{background:var(--field);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+.tagpick button.on{background:#5a3f1f;border-color:var(--accent);color:var(--ink)}
+.chip.tag{background:#3a2a17;border-color:#8a6a3a;color:#e6cfa6;cursor:pointer}
 .seg button{background:var(--field);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:6px 11px;font-size:13px;cursor:pointer}
 .seg button.on{background:var(--ink);color:#231b13;border-color:var(--ink)}
 .swatches button{width:30px;height:30px;border-radius:8px;border:2px solid transparent;cursor:pointer}
@@ -182,6 +187,7 @@ textarea.field{min-height:80px;resize:vertical}
 .stat-hero .num{font-family:"Cormorant Garamond",Georgia,serif;font-size:72px;font-weight:600;line-height:1;color:var(--accent)}
 .stat-hero .lbl{color:var(--muted);font-size:15px;margin-top:6px}
 .stats h2{font-family:"Cormorant Garamond",Georgia,serif;font-size:28px;font-weight:600;margin:28px 4px 12px}
+.yrow.tagrow{grid-template-columns:110px 1fr 44px}
 .yrow{display:grid;grid-template-columns:56px 1fr 44px;align-items:center;gap:12px;padding:12px 14px;background:#231c15;border:1px solid #3d3226;border-radius:14px;margin-bottom:10px;cursor:pointer;width:100%;color:var(--ink);text-align:left;font:inherit}
 .yrow:hover{border-color:var(--accent)}
 .yrow .y{font-family:"Cormorant Garamond",Georgia,serif;font-size:22px;font-weight:600}
@@ -338,6 +344,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
     <input class="field" id="q" type="search" placeholder="Cerca per titolo o autore" autocomplete="off">
   </div>
   <select class="field" id="authorSel"><option value="">Tutti gli autori</option></select>
+  <select class="field" id="tagSel"><option value="">Tutte le etichette</option></select>
 </div>
 <nav class="years" id="years"></nav>
 <div class="status" id="status"></div>
@@ -364,6 +371,12 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
         <label for="fPages">Pagine (facoltativo)</label>
         <input class="field" id="fPages" type="number" inputmode="numeric" min="1" max="5000">
       </div>
+    </div>
+    <label>Etichette</label>
+    <div class="tagpick" id="fTags"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <input class="field" id="fTagNew" placeholder="Nuova etichetta, es. giallo" autocomplete="off" style="flex:1">
+      <button type="button" class="btn ghost small" id="fTagAdd">Aggiungi</button>
     </div>
     <label for="fPub">Anno di pubblicazione</label>
     <div style="display:flex;gap:8px">
@@ -420,10 +433,10 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.19";
+const APP_VERSION = "1.20";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
-const state = { books: [], view: NOW_YEAR, q: "", author: "", newId: null, editing: null, rating: 0, color: "" };
+const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
 
 
 const $ = id => document.getElementById(id);
@@ -462,9 +475,16 @@ function flipName(name){
 }
 function authorLabel(a){ return String(a || "").split(",").map(flipName).filter(Boolean).join(", "); }
 function sortKey(b){ return (b.finished || String(b.createdAt || "").slice(0,10)) + "|" + (b.createdAt || ""); }
+function allTags(){
+  const set = new Set();
+  for (const b of state.books) for (const t of b.tags || []) set.add(t);
+  return [...set].sort((a,b) => a.localeCompare(b, "it"));
+}
+function cleanTag(t){ return String(t || "").replace(/\s+/g, " ").trim().slice(0, 30); }
 function matches(b){
   if (state.author && b.author !== state.author) return false;
-  if (state.q){ const q = norm(state.q); if (!norm(b.title).includes(q) && !norm(b.author).includes(q)) return false; }
+  if (state.tag && !(b.tags || []).includes(state.tag)) return false;
+  if (state.q){ const q = norm(state.q); if (!norm(b.title).includes(q) && !norm(b.author).includes(q) && !(b.tags || []).some(t => norm(t).includes(q))) return false; }
   return true;
 }
 
@@ -493,8 +513,14 @@ function render(){
   sel.innerHTML = `<option value="">Tutti gli autori</option>` + authors.map(a => `<option value="${esc(a)}" ${a===state.author?"selected":""}>${esc(labels[a])}</option>`).join("");
   $("authorList").innerHTML = authors.map(a => `<option value="${esc(a)}">`).join("");
 
+  // etichette
+  const tags = allTags();
+  if (state.tag && !tags.includes(state.tag)) state.tag = "";
+  $("tagSel").innerHTML = `<option value="">Tutte le etichette</option>` + tags.map(t => `<option value="${esc(t)}" ${t===state.tag?"selected":""}>${esc(t)}</option>`).join("");
+  $("tagSel").hidden = !tags.length;
+
   // shelves
-  const filtering = !!(state.q || state.author);
+  const filtering = !!(state.q || state.author || state.tag);
   const shown = state.view === "all" ? years : [state.view];
   let html = "", total = 0;
   for (const y of shown){
@@ -574,6 +600,19 @@ function renderHome(){
     : `${cur} ${cur===1?"libro":"libri"} nel ${NOW_YEAR}`;
   $("homeBanner").innerHTML = bannerHTML();
 }
+function tagStatsHTML(){
+  const m = {};
+  for (const b of state.books) for (const t of b.tags || []) m[t] = (m[t] || 0) + 1;
+  const rows = Object.entries(m).sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0], "it"));
+  if (!rows.length) return "";
+  const max = Math.max(...rows.map(r => r[1]));
+  return `<h2>Per etichetta</h2>` + rows.map(([t,c]) => `
+    <button class="yrow tagrow" data-tag="${esc(t)}">
+      <span class="y" style="font-size:16px;font-family:Inter,sans-serif;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t)}</span>
+      <span class="track"><span class="fill" style="display:block;width:${Math.max(3, c / max * 100)}%"></span></span>
+      <span class="n">${c}</span>
+    </button>`).join("") + `<p class="note">Tocca un'etichetta per vedere i suoi libri.</p>`;
+}
 function renderStats(){
   const n = state.books.length;
   const yc = yearCounts();
@@ -588,12 +627,15 @@ function renderStats(){
         <span class="track"><span class="fill" style="display:block;width:${Math.max(3, c / max * 100)}%"></span></span>
         <span class="n">${getGoals()[y] ? `${c}<small>/${getGoals()[y]}</small>` : c}</span>
       </button>`).join("") : `<p class="note">Ancora nessun libro registrato.</p>`}
-    ${yc.length ? `<p class="note">Tocca un anno per aprire il suo scaffale.</p>` : ""}`;
+    ${yc.length ? `<p class="note">Tocca un anno per aprire il suo scaffale.</p>` : ""}
+    ${tagStatsHTML()}`;
 }
 $("viewStats").addEventListener("click", e => {
   if (e.target.closest("#goalSet")) return openGoal();
+  const tr = e.target.closest(".tagrow");
+  if (tr){ state.tag = tr.dataset.tag; state.view = "all"; state.q = ""; state.author = ""; $("q").value = ""; return showView("libreria"); }
   const r = e.target.closest(".yrow"); if (!r) return;
-  state.view = Number(r.dataset.y); state.q = ""; state.author = ""; $("q").value = "";
+  state.view = Number(r.dataset.y); state.q = ""; state.author = ""; state.tag = ""; $("q").value = "";
   showView("libreria");
 });
 
@@ -1143,6 +1185,29 @@ async function exportBackup(){
   setMeta("lastBackupAt", new Date().toISOString()); setMeta("snoozeUntil", null);
   return "Backup scaricato (" + name + ").";
 }
+async function exportCSV(){
+  const cols = ["Anno di lettura","Titolo","Autore","Anno di pubblicazione","Voto","Pagine","Iniziato il","Finito il","Etichette","Trama","L'autore"];
+  const fmtD = d => d ? d.split("-").reverse().join("/") : "";
+  const rows = [...state.books]
+    .sort((a,b) => (Number(b.year) - Number(a.year)) || sortKey(a).localeCompare(sortKey(b)))
+    .map(b => [b.year, b.title, b.author, b.pubYear || "", b.rating ? String(b.rating).replace(".", ",") : "", b.pages || "",
+               fmtD(b.started), fmtD(b.finished), (b.tags || []).join(", "), b.notes || "", b.quotes || ""]);
+  const cell = v => { const t = String(v ?? ""); return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const csv = "\ufeff" + [cols, ...rows].map(r => r.map(cell).join(";")).join("\r\n");
+  const name = "diario-di-lettura-" + new Date().toISOString().slice(0,10) + ".csv";
+  const file = new File([csv], name, { type: "text/csv" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })){
+      await navigator.share({ files: [file], title: "Diario di lettura" });
+      return "File pronto: aprilo con Excel o Numbers.";
+    }
+  } catch(e){ if (e && e.name === "AbortError") return ""; }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a"); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return "Diario scaricato (" + name + ").";
+}
 function parseBackup(text){
   let data; try { data = JSON.parse(text); } catch(e){ throw new Error("Il file non è un backup valido."); }
   const list = Array.isArray(data) ? data : data && data.books;
@@ -1159,6 +1224,7 @@ function parseBackup(text){
       notes: typeof b.notes === "string" ? b.notes : null,
       quotes: typeof b.quotes === "string" ? b.quotes : null,
       started: typeof b.started === "string" ? b.started.slice(0,10) : null,
+      tags: Array.isArray(b.tags) ? [...new Set(b.tags.map(cleanTag).filter(Boolean))].slice(0, 20) : null,
       spineW: [22,32,44,58].includes(Number(b.spineW)) ? Number(b.spineW) : null,
       spineH: [0.7,0.83,0.96].includes(Number(b.spineH)) ? Number(b.spineH) : null,
       pubYear: parseInt(b.pubYear, 10) > 0 ? parseInt(b.pubYear, 10) : null,
@@ -1196,6 +1262,7 @@ function openMenu(msg){
     <p>I libri sono salvati su questo dispositivo e funzionano anche offline. Per portarli su un altro dispositivo, esporta un backup e importalo lì.</p>
     <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
     <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
+    <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
     <button class="item" id="mMissCover">Libri senza copertina<small>${missingCover().length} libri · tocca per vedere quali</small></button>
     <button class="item" id="mMissPub">Libri senza anno di pubblicazione<small>${missingPub().length} libri · tocca per vedere quali</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
@@ -1206,6 +1273,7 @@ function openMenu(msg){
   $("mClose").onclick = () => $("menuOv").hidden = true;
   $("mExport").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportBackup(); render(); };
   $("mImport").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
+  $("mCsv").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportCSV(); };
   $("mMissCover").onclick = () => openMissing("cover");
   $("mMissPub").onclick = () => openMissing("pub");
 }
@@ -1300,7 +1368,7 @@ async function applyImport(books){
   if (wish){ state.wish = wish; try { persistWish(); } catch(e){} }
   if (reading){ state.reading = reading; try { persistReading(); } catch(e){} }
   setMeta("lastBackupAt", new Date().toISOString());
-  state.view = "all"; state.q = ""; state.author = ""; $("q").value = "";
+  state.view = "all"; state.q = ""; state.author = ""; state.tag = ""; $("q").value = "";
   render();
   openMenu(`Importati ${books.length} libri.`);
 }
@@ -1349,6 +1417,9 @@ function openForm(book){
   $("fYear").value = book?.year || (state.view === "all" ? NOW_YEAR : state.view);
   $("fPages").value = book?.pages || "";
   $("fPub").value = book?.pubYear || "";
+  state.ftags = [...(book?.tags || [])];
+  $("fTagNew").value = "";
+  drawTagPick();
   $("fPubHint").textContent = "";
   $("fDate").value = book?.finished || "";
   state.rating = book?.rating || 0;
@@ -1372,6 +1443,26 @@ $("fPubFind").addEventListener("click", async () => {
   if (y){ $("fPub").value = y; $("fPubHint").textContent = `Trovato ${y} (prima edizione secondo Google Books / Open Library): controlla che sia giusto.`; }
   else $("fPubHint").textContent = "Non l'ho trovato: inseriscilo a mano.";
 });
+function drawTagPick(){
+  const all = [...new Set([...allTags(), ...state.ftags])].sort((a,b) => a.localeCompare(b, "it"));
+  $("fTags").innerHTML = all.length
+    ? all.map(t => `<button type="button" data-t="${esc(t)}" class="${state.ftags.includes(t) ? "on" : ""}">${esc(t)}</button>`).join("")
+    : `<span class="hint" style="margin:0">Nessuna etichetta ancora: scrivine una qui sotto.</span>`;
+}
+$("fTags").addEventListener("click", e => {
+  const b = e.target.closest("button[data-t]"); if (!b) return;
+  const t = b.dataset.t;
+  state.ftags = state.ftags.includes(t) ? state.ftags.filter(x => x !== t) : [...state.ftags, t];
+  drawTagPick();
+});
+function addNewTag(){
+  const t = cleanTag($("fTagNew").value); if (!t) return;
+  const existing = allTags().find(x => x.toLowerCase() === t.toLowerCase()) || t;
+  if (!state.ftags.includes(existing)) state.ftags.push(existing);
+  $("fTagNew").value = ""; drawTagPick();
+}
+$("fTagAdd").addEventListener("click", addNewTag);
+$("fTagNew").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); addNewTag(); } });
 let sortTouched = false;
 $("fAuthor").addEventListener("input", () => { if (!sortTouched) $("fAuthorSort").value = authorLabel($("fAuthor").value); });
 $("fAuthorSort").addEventListener("input", () => { sortTouched = true; });
@@ -1392,6 +1483,7 @@ $("form").addEventListener("submit", async e => {
     title, author, year,
     authorSort: (() => { const v = $("fAuthorSort").value.trim(); return v && v !== authorLabel(author) ? v : null; })(),
     pages: parseInt($("fPages").value, 10) || null,
+    tags: state.ftags.length ? [...state.ftags] : null,
     pubYear: (() => { const v = parseInt($("fPub").value, 10); return v > 0 && v <= 2100 ? v : null; })(),
     finished: $("fDate").value || null,
     rating: state.rating || null,
@@ -1458,7 +1550,7 @@ function openDetail(id){
         <div class="who">${esc(b.author)}</div>
         <div class="pub">${b.pubYear ? `Pubblicato nel ${b.pubYear}` : `Anno di pubblicazione non indicato`}</div>
         ${b.rating ? `<div class="st" style="margin-top:8px">${starGlyphs(b.rating)}<small>${fmtRating(b.rating)}</small></div>` : ""}
-        <div class="chips" style="margin:12px 0 0">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+        <div class="chips" style="margin:12px 0 0">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}${(b.tags || []).map(t => `<button type="button" class="chip tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>
       </div>
     </div>
     <div class="coveracts">
@@ -1542,7 +1634,11 @@ $("photoFile").addEventListener("change", async e => {
     drawCover(nb);
   } catch(err){ $("dHint").textContent = "Non sono riuscita a usare questa immagine."; }
 });
-$("detOv").addEventListener("click", e => { if (e.target.id === "detOv") closeDetail(); });
+$("detOv").addEventListener("click", e => {
+  if (e.target.id === "detOv") return closeDetail();
+  const tg = e.target.closest(".chip.tag");
+  if (tg){ const t = tg.dataset.tag; closeDetail(); state.tag = t; state.view = "all"; state.q = ""; state.author = ""; $("q").value = ""; if (currentView !== "libreria") showView("libreria"); else render(); }
+});
 
 /* ---------- Events ---------- */
 $("addBtn").addEventListener("click", () => currentView === "dacercare" ? openWishForm(null) : openForm(null));
@@ -1554,6 +1650,7 @@ $("main").addEventListener("click", e => {
 $("years").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.y === "all" ? "all" : Number(b.dataset.y); render(); });
 let qt; $("q").addEventListener("input", e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value.trim(); if (state.q && state.view !== "all") state.view = "all"; render(); }, 150); });
 $("authorSel").addEventListener("change", e => { state.author = e.target.value; if (state.author) state.view = "all"; render(); });
+$("tagSel").addEventListener("change", e => { state.tag = e.target.value; if (state.tag) state.view = "all"; render(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("cfOv").hidden){ $("cfNo").click(); return; } if (e.key === "Escape"){ closeForm(); if (!$("detOv").hidden) closeDetail(); $("menuOv").hidden = true; } });
 
 $("credits").innerHTML = `<b>La mia libreria</b><br>Versione ${APP_VERSION} · by Massimo Merigo`;
