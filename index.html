@@ -501,7 +501,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.35";
+const APP_VERSION = "1.36";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -801,6 +801,16 @@ $("viewStats").addEventListener("click", async e => {
     drawAuthorPhoto(key);
   }
 });
+// Allunga il riquadro al testo senza far saltare la pagina
+function growKeep(el, min){
+  const det = document.getElementById("det");
+  const wy = window.scrollY, dy = det ? det.scrollTop : 0, h = el.offsetHeight;
+  el.style.height = h + "px";
+  const need = Math.max(min, el.scrollHeight + 2);
+  if (need > h){ el.style.height = need + "px"; }
+  else { el.style.height = "1px"; el.style.height = Math.max(min, el.scrollHeight + 2) + "px"; }
+  window.scrollTo(0, wy); if (det) det.scrollTop = dy;
+}
 function saveAuthorWorks(key, text){
   const m = getMeta(); const w = { ...(m.works || {}) }; const k = authorKey(key); const v = text.split("\n").filter(l => l.replace(/^•\s*/, "").trim()).join("\n").trim();
   if (v) w[k] = v; else delete w[k];
@@ -819,7 +829,7 @@ function renderStats(){
     $("viewStats").innerHTML = authorPageHTML(statsAuthor);
     drawAuthorPhoto(statsAuthor);
     const ta = $("authorInfo"), wk = $("authorWorks");
-    const growEl = el => { el.style.height = "auto"; el.style.height = Math.max(140, el.scrollHeight + 2) + "px"; };
+    const growEl = el => growKeep(el, 140);
     const grow = () => growEl(ta);
     grow(); growEl(wk);
     let worksTimer = null;
@@ -1957,7 +1967,7 @@ function openDetail(id){
       <button class="btn ghost" id="dEdit">Modifica</button>
       <button class="btn" id="dClose">Chiudi</button>
     </div>`;
-  const autoGrow = ta => { ta.style.height = "auto"; ta.style.height = Math.max(58, ta.scrollHeight + 2) + "px"; };
+  const autoGrow = ta => growKeep(ta, 58);
   $("dQuotes").addEventListener("input", () => autoGrow($("dQuotes")));
   $("dMy").addEventListener("input", () => autoGrow($("dMy")));
   $("det").scrollTop = 0;
