@@ -488,7 +488,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.30";
+const APP_VERSION = "1.31";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -728,7 +728,6 @@ function authorPageHTML(key){
     <h2>Info sull'autore</h2>
     <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Incolla qui biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
     <div class="saved" id="authorSaved"></div>
-    <p class="note" style="text-align:left;margin:4px 4px 0">Le info compaiono anche nel riquadro "L'autore" di tutti i suoi libri.</p>
     <h2>Opere</h2>
     <textarea class="field notesarea autogrow" id="authorWorks" data-min="140" placeholder="Scrivi qui tutte le sue opere, una per riga…" style="min-height:140px;overflow:hidden;resize:none;text-align:left">${esc(works)}</textarea>
     <div class="saved" id="worksSaved"></div>`;
