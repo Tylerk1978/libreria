@@ -430,16 +430,13 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
     </div>
     <div class="hint" id="fCoverHint"></div>
     <div class="picks" id="fPicks"></div>
-    <div class="row2">
-      <div id="fYearBox">
-        <label for="fYear">Anno di lettura</label>
-        <input class="field" id="fYear" type="number" inputmode="numeric" min="1900" max="2100">
-      </div>
-      <div>
-        <label for="fPages">Pagine (facoltativo)</label>
-        <input class="field" id="fPages" type="number" inputmode="numeric" min="1" max="5000">
-      </div>
+    <div id="fYearBox">
+      <label for="fYear">Anno di lettura</label>
+      <input class="field" id="fYear" type="number" inputmode="numeric" min="1900" max="2100">
     </div>
+    <input type="hidden" id="fPages">
+    <label for="fNotes">Trama</label>
+    <textarea class="field notesarea" id="fNotes" placeholder="Di cosa parla il libro…" style="min-height:120px"></textarea>
     <label>Genere</label>
     <div class="tagpick" id="fTags"></div>
     <div style="display:flex;gap:8px;margin-top:8px">
@@ -504,7 +501,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.38";
+const APP_VERSION = "1.39";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -1646,7 +1643,7 @@ function openForm(book, opts = {}){
   $("formTitle").textContent = book ? "Modifica libro" : newTitle;
   $("fSave").textContent = book ? "Salva" : newBtn;
   $("fYearBox").hidden = notRead;
-  $("fYearBox").parentNode.classList.toggle("single", notRead);
+
   $("fDoneBox").hidden = notRead;
   $("fTitle").value = book?.title || opts.title || "";
   $("fAuthor").value = book?.author || opts.author || (state.author || "");
@@ -1654,6 +1651,7 @@ function openForm(book, opts = {}){
   sortTouched = !!book?.authorSort;
   $("fYear").value = book?.year || (state.view === "all" ? NOW_YEAR : state.view);
   $("fPages").value = book?.pages || "";
+  $("fNotes").value = book?.notes || "";
   $("fPub").value = book?.pubYear || "";
   state.ftags = [...(book?.tags || [])];
   state.pendingCover = null;
@@ -1847,7 +1845,7 @@ $("form").addEventListener("submit", async e => {
     color: state.color || null,
     spineW: state.spineW || null,
     spineH: state.spineH || null,
-    notes: prev?.notes || null,
+    notes: $("fNotes").value.trim() || null,
     mynotes: prev?.mynotes || null,
     quotes: (prev && authorKey(prev.author) === authorKey(author) ? prev.quotes : null) || authorNoteFor(author, prev?.id) || null,
     coverUrl: prev?.coverUrl || null,
