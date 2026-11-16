@@ -160,7 +160,7 @@ main{max-width:1100px;margin:0 auto;padding:4px calc(20px + env(safe-area-inset-
 .tagpick{display:flex;flex-wrap:wrap;gap:6px}
 .tagpick button{background:var(--field);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
 .tagpick button.on{background:#5a3f1f;border-color:var(--accent);color:var(--ink)}
-.chip.tag{background:#3a2a17;border-color:#8a6a3a;color:#e6cfa6;cursor:pointer}
+.chip.tag{background:#3a2a17;border-color:#8a6a3a;color:#e6cfa6;cursor:pointer;font-size:11px;padding:3px 9px;font-family:inherit}
 .seg button{background:var(--field);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:6px 11px;font-size:13px;cursor:pointer}
 .seg button.on{background:var(--ink);color:#231b13;border-color:var(--ink)}
 .swatches button{width:30px;height:30px;border-radius:8px;border:2px solid transparent;cursor:pointer}
@@ -278,6 +278,7 @@ textarea.field{min-height:80px;resize:vertical}
 .aphoto-acts .linkbtn{text-decoration:none;font-size:14px}
 .grp{margin-bottom:10px}
 .grp .yrow{margin-bottom:0;grid-template-columns:minmax(0,130px) 1fr 40px}
+.grp.autore .yrow .y{font-size:13.5px}
 .grp .yrow .y{font-size:16px;font-family:Inter,sans-serif;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .grp.open .yrow{border-color:var(--accent);border-radius:14px 14px 0 0}
 .grp-list{background:#1d1711;border:1px solid var(--accent);border-top:0;border-radius:0 0 14px 14px;padding:6px 12px 10px}
@@ -299,6 +300,8 @@ textarea.field{min-height:80px;resize:vertical}
 .ok:empty{display:none}
 
 .detail .pub{color:var(--muted);font-size:14px;margin-top:6px;opacity:.85}
+.wholink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text-align:left;text-decoration:underline;text-decoration-color:rgba(217,166,90,.45);text-underline-offset:4px}
+.wholink span{color:var(--accent);text-decoration:none;display:inline-block}
 .detail .who{color:var(--muted);font-size:16px;margin-top:-6px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 .chip{background:var(--field);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--muted)}
@@ -501,7 +504,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.36";
+const APP_VERSION = "1.38";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -707,7 +710,7 @@ function groupHTML(kind){
   return groups.map(g => {
     const open = statsOpen === kind + ":" + g.key;
     const a = avg(g.books);
-    return `<div class="grp${open ? " open" : ""}">
+    return `<div class="grp ${kind}${open ? " open" : ""}">
       <button class="yrow grow" data-g="${esc(g.key)}">
         <span class="y">${esc(g.label)}</span>
         <span class="track"><span class="fill" style="display:block;width:${Math.max(3, g.books.length / max * 100)}%"></span></span>
@@ -1903,9 +1906,10 @@ function fillAuthorNotes(){
 }
 function saveTexts(id){
   const n = document.getElementById("dNotes"), q = document.getElementById("dQuotes"), my = document.getElementById("dMy");
-  if (!n || !q) return 0;
+  if (!n) return 0;
   const before = (state.books.find(x => x.id === id) || {}).quotes || null;
-  updateBook(id, { notes: n.value.trim() || null, quotes: q.value.trim() || null, ...(my ? { mynotes: my.value.trim() || null } : {}) });
+  updateBook(id, { notes: n.value.trim() || null, ...(q ? { quotes: q.value.trim() || null } : {}), ...(my ? { mynotes: my.value.trim() || null } : {}) });
+  if (!q) return 0;
   const after = q.value.trim() || null;
   return before !== after ? shareAuthorNote(id) : 0;
 }
@@ -1943,7 +1947,7 @@ function openDetail(id){
       <div id="dCover"></div>
       <div style="min-width:0">
         <h3 style="margin-bottom:10px">${esc(b.title)}</h3>
-        <div class="who">${esc(b.author)}</div>
+        <button type="button" class="who wholink" id="dAuthor">${esc(b.author)} <span>›</span></button>
         <div class="pub">${b.pubYear ? `Pubblicato nel ${b.pubYear}` : `Anno di pubblicazione non indicato`}</div>
         ${b.rating ? `<div class="st" style="margin-top:8px">${starGlyphs(b.rating)}<small>${fmtRating(b.rating)}</small></div>` : ""}
         <div class="chips" style="margin:12px 0 0">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}${(b.tags || []).map(t => `<button type="button" class="chip tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>
@@ -1955,9 +1959,6 @@ function openDetail(id){
     <label for="dNotes">Trama</label>
     <textarea class="field notesarea" id="dNotes" placeholder="Di cosa parla il libro…">${esc(b.notes || "")}</textarea>
     <div class="saved" id="dSavedNotes"></div>
-    <label for="dQuotes">L'autore</label>
-    <textarea class="field notesarea quotesarea" id="dQuotes" rows="2" placeholder="Chi è, altre opere, curiosità…">${esc(b.quotes || "")}</textarea>
-    <div class="saved" id="dSavedQuotes"></div>
     <label for="dMy">Note</label>
     <textarea class="field notesarea quotesarea" id="dMy" rows="2" placeholder="Le tue impressioni, citazioni, chi te l'ha consigliato…">${esc(b.mynotes || "")}</textarea>
     <div class="saved" id="dSavedMy"></div>
@@ -1968,12 +1969,11 @@ function openDetail(id){
       <button class="btn" id="dClose">Chiudi</button>
     </div>`;
   const autoGrow = ta => growKeep(ta, 58);
-  $("dQuotes").addEventListener("input", () => autoGrow($("dQuotes")));
   $("dMy").addEventListener("input", () => autoGrow($("dMy")));
   $("det").scrollTop = 0;
-  drawCover(b).then(() => { $("detOv").hidden = false; autoGrow($("dQuotes")); autoGrow($("dMy")); $("det").scrollTop = 0; });
+  drawCover(b).then(() => { $("detOv").hidden = false; autoGrow($("dMy")); $("det").scrollTop = 0; });
 
-  for (const [elId, field, savedId] of [["dNotes","notes","dSavedNotes"],["dQuotes","quotes","dSavedQuotes"],["dMy","mynotes","dSavedMy"]]){
+  for (const [elId, field, savedId] of [["dNotes","notes","dSavedNotes"],["dMy","mynotes","dSavedMy"]]){
     $(elId).addEventListener("input", () => {
       $(savedId).textContent = "";
       clearTimeout(notesTimer);
@@ -1987,6 +1987,7 @@ function openDetail(id){
   }
 
   $("dClose").onclick = closeDetail;
+  $("dAuthor").onclick = () => { flushNotes(); closeDetail(); statsSub = "autore"; statsOpen = null; statsAuthor = b.author; showView("statistiche"); };
   if (b.reading) $("dFinish").onclick = () => { flushNotes(); closeDetail(); openFinish(id); };
   if (b.list === "wish") $("dToRead").onclick = () => { flushNotes(); moveList(id, "toread"); };
   if (b.list === "toread") $("dStart").onclick = () => { flushNotes(); moveList(id, "reading"); };
