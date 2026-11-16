@@ -488,7 +488,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.29";
+const APP_VERSION = "1.30";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -715,20 +715,28 @@ function authorPageHTML(key){
   const note = (state.books.filter(b => authorKey(b.author) === k && b.quotes).sort((a,b) => String(b.updatedAt||"").localeCompare(String(a.updatedAt||"")))[0] || {}).quotes || "";
   const rated = books.filter(b => b.rating);
   const avg = rated.length ? Math.round(rated.reduce((s,b) => s + b.rating, 0) / rated.length * 10) / 10 : 0;
+  const works = (getMeta().works || {})[k] || "";
   return `
     <button class="linkbtn" id="authorBack" style="text-decoration:none;font-size:15px">‹ Per autore</button>
     <h2 style="margin-top:12px;margin-bottom:4px">${esc(label)}</h2>
-    <p class="note" style="text-align:left;margin:0 4px 16px">${books.length} ${books.length===1?"libro letto":"libri letti"}${avg ? ` · voto medio ${fmtRating(avg)} ★` : ""}${others.length ? ` · ${others.length} in lettura o in lista` : ""}</p>
-    <label for="authorInfo" style="display:block;color:var(--muted);font-size:13px;margin:0 4px 6px">Info sull'autore</label>
-    <textarea class="field notesarea" id="authorInfo" placeholder="Incolla qui biografia, altre opere, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
-    <div class="saved" id="authorSaved"></div>
-    <p class="note" style="text-align:left;margin:4px 4px 0">Le info compaiono anche nel riquadro "L'autore" di tutti i suoi libri.</p>
+    <p class="note" style="text-align:left;margin:0 4px 6px">${books.length} ${books.length===1?"libro letto":"libri letti"}${avg ? ` · voto medio ${fmtRating(avg)} ★` : ""}</p>
     <h2>I suoi libri</h2>
     <div class="grp-list" style="border-top:1px solid var(--accent);border-radius:14px">
-      ${books.map(b => `<button class="grp-book" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span>letto nel ${b.year}${b.pubYear ? ` · pubblicato nel ${b.pubYear}` : ""}${b.rating ? " · " + fmtRating(b.rating) + " ★" : ""}</span></button>`).join("")}
-      ${others.map(b => `<button class="grp-book" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span>${b.reading ? "sto leggendo" : b.list === "wish" ? "da cercare" : "da leggere"}</span></button>`).join("")}
+      ${books.length ? books.map(b => `<button class="grp-book" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span>letto nel ${b.year}${b.pubYear ? ` · pubblicato nel ${b.pubYear}` : ""}${b.rating ? " · " + fmtRating(b.rating) + " ★" : ""}</span></button>`).join("") : `<p class="note" style="text-align:left">Nessun libro letto.</p>`}
       <button class="linkbtn grp-shelf" data-g="${esc(key)}">Vedi sullo scaffale ›</button>
-    </div>`;
+    </div>
+    <h2>Info sull'autore</h2>
+    <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Incolla qui biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
+    <div class="saved" id="authorSaved"></div>
+    <p class="note" style="text-align:left;margin:4px 4px 0">Le info compaiono anche nel riquadro "L'autore" di tutti i suoi libri.</p>
+    <h2>Opere</h2>
+    <textarea class="field notesarea autogrow" id="authorWorks" data-min="140" placeholder="Scrivi qui tutte le sue opere, una per riga…" style="min-height:140px;overflow:hidden;resize:none;text-align:left">${esc(works)}</textarea>
+    <div class="saved" id="worksSaved"></div>`;
+}
+function saveAuthorWorks(key, text){
+  const m = getMeta(); const w = { ...(m.works || {}) }; const k = authorKey(key); const v = text.trim();
+  if (v) w[k] = v; else delete w[k];
+  setMeta("works", w);
 }
 function saveAuthorInfo(key, text){
   const k = authorKey(key), now = new Date().toISOString(), v = text.trim() || null;
@@ -741,9 +749,18 @@ function renderStats(){
   const n = readList().length;
   if (statsSub === "autore" && statsAuthor){
     $("viewStats").innerHTML = authorPageHTML(statsAuthor);
-    const ta = $("authorInfo");
-    const grow = () => { ta.style.height = "auto"; ta.style.height = Math.max(140, ta.scrollHeight + 2) + "px"; };
-    grow();
+    const ta = $("authorInfo"), wk = $("authorWorks");
+    const growEl = el => { el.style.height = "auto"; el.style.height = Math.max(140, el.scrollHeight + 2) + "px"; };
+    const grow = () => growEl(ta);
+    grow(); growEl(wk);
+    let worksTimer = null;
+    const keyW = statsAuthor;
+    wk.addEventListener("input", () => {
+      growEl(wk); $("worksSaved").textContent = "";
+      clearTimeout(worksTimer);
+      worksTimer = setTimeout(() => { worksTimer = null; saveAuthorWorks(keyW, wk.value); $("worksSaved").textContent = "Salvato"; }, 600);
+    });
+    wk.addEventListener("blur", () => { if (worksTimer){ clearTimeout(worksTimer); worksTimer = null; saveAuthorWorks(keyW, wk.value); $("worksSaved").textContent = "Salvato"; } });
     ta.addEventListener("input", () => {
       grow(); $("authorSaved").textContent = "";
       clearTimeout(authorTimer);
@@ -1240,7 +1257,7 @@ async function exportBackup(){
     }
     books.push(copy);
   }
-  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), books });
+  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), works: getMeta().works || {}, books });
   const name = backupName();
   const file = new File([payload], name, { type: "application/json" });
   try {
@@ -1312,6 +1329,10 @@ function parseBackup(text){
     });
   }
   if (!out.length) throw new Error("Nel file non ho trovato libri.");
+  if (data && data.works && typeof data.works === "object"){
+    const w = {}; for (const [k, v] of Object.entries(data.works)) if (typeof v === "string" && v.trim()) w[k] = v;
+    out.works = w;
+  }
   if (data && data.goals && typeof data.goals === "object"){
     const g = {}; for (const [y, n] of Object.entries(data.goals)){ const yy = parseInt(y, 10), nn = parseInt(n, 10); if (yy && nn > 0) g[yy] = nn; }
     out.goals = g;
@@ -1435,11 +1456,13 @@ async function applyImport(books){
     delete b.coverData;
   }
   const goals = books.goals; delete books.goals;
+  const works = books.works; delete books.works;
   const wish = books.wish; delete books.wish;
   const reading = books.reading; delete books.reading;
   state.books = books;
   try { persist(); } catch(e){ state.books = prev; openMenu(); $("mErr").textContent = errText(e); return; }
   if (goals) setMeta("goals", goals);
+  if (works) setMeta("works", works);
   fillAuthorNotes();
   if (wish && wish.length){
     for (const w of wish) if (!state.books.some(b => b.id === w.id))
