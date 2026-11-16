@@ -271,10 +271,14 @@ textarea.field{min-height:80px;resize:vertical}
 .aphoto-wrap{display:flex;flex-direction:column;align-items:center;margin:26px 0 4px}
 .aphoto{width:170px;height:210px;border-radius:14px;border:1px dashed #6b5132;background:#1d1711;color:var(--muted);cursor:pointer;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(0,0,0,.4)}
 .aphoto.has{border:0}
-.aphoto img{width:100%;height:100%;object-fit:cover;display:block}
+.aphoto img{width:100%;height:100%;object-fit:cover;object-position:center 20%;display:block}
 .aphoto-ph{font-size:13px;line-height:1.6}
 .aphoto-acts{display:flex;gap:22px;margin-top:10px}
 .aphoto-acts[hidden]{display:none}
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0;max-height:55vh;overflow:auto}
+.pgrid button{padding:0;border:1px solid #5d4c39;border-radius:12px;overflow:hidden;background:#1d1711;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;text-align:left}
+.pgrid img{width:100%;aspect-ratio:4/5;object-fit:cover;object-position:top;display:block}
+.pgrid span{font-size:11px;padding:6px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aphoto-acts .linkbtn{text-decoration:none;font-size:14px}
 .grp{margin-bottom:10px}
 .grp .yrow{margin-bottom:0;grid-template-columns:minmax(0,130px) 1fr 40px}
@@ -501,7 +505,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.41";
+const APP_VERSION = "1.42";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -750,7 +754,8 @@ function authorPageHTML(key){
       <button class="linkbtn grp-shelf" data-g="${esc(key)}">Vedi sullo scaffale ›</button>
     </div>
     <div class="aphoto-wrap"><button type="button" class="aphoto" id="aPhoto" aria-label="Foto dell'autore"><span class="aphoto-ph">＋<br>Carica una foto</span></button>
-      <div class="aphoto-acts" id="aPhotoActs" hidden><button type="button" class="linkbtn" id="aPhotoChange">Cambia</button><button type="button" class="linkbtn" id="aPhotoDel">Togli</button></div></div>
+      <div class="aphoto-acts" id="aPhotoActs" hidden><button type="button" class="linkbtn" id="aPhotoChange">Carica</button><button type="button" class="linkbtn" id="aPhotoOnline2">Scegli online</button><button type="button" class="linkbtn" id="aPhotoDel">Togli</button></div>
+      <div class="aphoto-acts" id="aPhotoWeb" hidden><button type="button" class="linkbtn" id="aPhotoFind">Scegli una foto online</button></div></div>
     <h2>Info sull'autore</h2>
     <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Incolla qui biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
     <div class="saved" id="authorSaved"></div>
@@ -776,25 +781,139 @@ function bulletize(text, caret){
 }
 const aPhotoURLs = {};
 function aPhotoKey(key){ return "author:" + authorKey(key); }
+/* ---------- Foto degli autori da internet (Wikipedia, Open Library) ---------- */
+const WRITER_RE = /scrittor|scrittric|romanzier|poet|giornalist|saggist|drammaturg|filosof|storic|fumettist|autore|autrice|sceneggiator|letterat|accademic|traduttor|\b(writer|novelist|author|poet|journalist|essayist|playwright|philosopher|historian|screenwriter|cartoonist|comics|columnist|academic|translator|critic)\b/i;
+const anorm = s => norm(s).replace(/[^a-z0-9]/g, "");
+function authorSearchName(a){ return String(a || "").split(/\s*(?:,|;|&|\/|\se\s|\sand\s)\s*/)[0].trim(); }
+function authorUrlMap(){ return getMeta().authorPhotoUrls || {}; }
+function authorAutoMap(){ return getMeta().authorAuto || {}; }
+async function wikiPagesL(lang, params){
+  const r = await fetch(`https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages|description&piprop=thumbnail&pithumbsize=1000&` + params);
+  if (!r.ok) throw 0; const j = await r.json(); return Object.values(j.query?.pages || {}).filter(p => !("missing" in p));
+}
+async function authorWikiCandidates(name){
+  const out = [], seen = new Set(), n = anorm(name);
+  const add = (p, lang) => { if (p.thumbnail && !seen.has(p.thumbnail.source)){ seen.add(p.thumbnail.source); out.push({ src: p.thumbnail.source, thumb: p.thumbnail.source, label: p.title, from: "Wikipedia " + lang, exact: anorm(p.title.replace(/\s*\(.*\)$/, "")) === n }); } };
+  for (const lang of ["it", "en"]){
+    const suff = lang === "it" ? ["scrittore", "scrittrice", "poeta", "giornalista"] : ["writer", "author", "novelist", "poet"];
+    try {
+      const pages = await wikiPagesL(lang, "titles=" + encodeURIComponent([name, ...suff.map(x => `${name} (${x})`)].join("|")));
+      for (const p of pages) if (WRITER_RE.test(p.description || "")) add(p, lang);
+    } catch(e){}
+    try {
+      const pages = (await wikiPagesL(lang, "generator=search&gsrlimit=5&gsrsearch=" + encodeURIComponent(name + (lang === "it" ? " scrittore" : " writer")))).sort((a, b) => a.index - b.index);
+      for (const p of pages) if (WRITER_RE.test(p.description || "") && anorm(p.title.replace(/\s*\(.*\)$/, "")) === n) add(p, lang);
+    } catch(e){}
+  }
+  return out;
+}
+async function authorOLCandidates(name){
+  try {
+    const r = await fetch("https://openlibrary.org/search/authors.json?limit=5&q=" + encodeURIComponent(name)); if (!r.ok) return [];
+    const j = await r.json(); const n = anorm(name);
+    return (j.docs || []).filter(d => anorm(d.name) === n).slice(0, 2).map(d => ({ src: `https://covers.openlibrary.org/a/olid/${d.key}-L.jpg?default=false`, thumb: `https://covers.openlibrary.org/a/olid/${d.key}-M.jpg?default=false`, label: d.name, from: "Open Library", exact: true }));
+  } catch(e){ return []; }
+}
+async function imageUrlToBlobL(src){
+  const r = await fetch(src, { mode: "cors" }); if (!r.ok) throw 0;
+  const b = await r.blob(); if (b.size < 1500) throw 0; const url = URL.createObjectURL(b);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const k = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(res => c.toBlob(res, "image/jpeg", 0.88));
+  } finally { URL.revokeObjectURL(url); }
+}
+async function authorHasPhoto(k){ try { if (await idb.get("author:" + k)) return true; } catch(e){} return !!authorUrlMap()[k]; }
+function setAuthorFlags(k, auto, src){
+  const m = getMeta(); const a = { ...(m.authorAuto || {}) }, sr = { ...(m.authorPhotoSrc || {}) };
+  if (auto){ a[k] = true; sr[k] = src; } else { delete a[k]; delete sr[k]; }
+  setMeta("authorAuto", a); setMeta("authorPhotoSrc", sr);
+}
+function dropAuthorURL(k){ const key = "author:" + k; if (aPhotoURLs[key]){ if (aPhotoURLs[key].startsWith("blob:")) URL.revokeObjectURL(aPhotoURLs[key]); delete aPhotoURLs[key]; } }
+async function saveAuthorPhoto(k, src, auto){
+  const urls = { ...authorUrlMap() };
+  try { const blob = await imageUrlToBlobL(src); if (!blob) throw 0; await idb.set("author:" + k, blob); delete urls[k]; }
+  catch(e){ try { await idb.del("author:" + k); } catch(_){} urls[k] = src; const im = new Image(); im.src = src; }
+  setMeta("authorPhotoUrls", urls); setAuthorFlags(k, auto, src); dropAuthorURL(k);
+  setMeta("lastChangeAt", new Date().toISOString());
+}
+// Mette la foto solo se manca, o se quella attuale era stata messa in automatico: mai sopra una foto tua.
+async function autoAuthorPhoto(name){
+  const k = authorKey(name);
+  if (await authorHasPhoto(k) && !authorAutoMap()[k]) return "had";
+  const q = authorSearchName(name);
+  const c = (await authorWikiCandidates(q)).find(x => x.exact);
+  if (!c) return (await authorHasPhoto(k)) ? "had" : "none";
+  if (authorAutoMap()[k] && (getMeta().authorPhotoSrc || {})[k] === c.src) return "had";
+  await saveAuthorPhoto(k, c.src, true); return "new";
+}
+async function openAuthorPicker(name){
+  const k = authorKey(name), q = authorSearchName(name);
+  $("menu").innerHTML = `<h3>Foto di ${esc(q)}</h3><p>Cerco le foto…</p>`; $("menuOv").hidden = false;
+  const [wk, ol] = await Promise.all([authorWikiCandidates(q), authorOLCandidates(q)]);
+  const list = [...wk.filter(x => x.exact), ...ol, ...wk.filter(x => !x.exact)];
+  $("menu").innerHTML = `<h3>Foto di ${esc(q)}</h3>
+    <p>${list.length ? "Tocca la foto che vuoi usare." : "Non ho trovato foto online per questo autore. Puoi caricarne una tua."}</p>
+    <div class="pgrid">${list.map((c, i) => `<button type="button" data-i="${i}"><img src="${esc(c.thumb)}" alt="" loading="lazy" onerror="this.parentNode.remove()"><span>${esc(c.label)} · ${esc(c.from)}</span></button>`).join("")}</div>
+    <div class="actions"><button class="btn ghost" id="ppNo">Chiudi</button></div>`;
+  $("ppNo").onclick = () => { $("menuOv").hidden = true; };
+  $("menu").querySelector(".pgrid").onclick = async e => {
+    const b = e.target.closest("button[data-i]"); if (!b) return;
+    if (await authorHasPhoto(k) && !(await askConfirm("Cambiare la foto?", "Sostituirà la foto attuale dell'autore.", "Cambia"))) return;
+    b.style.opacity = ".5"; await saveAuthorPhoto(k, list[+b.dataset.i].src, false);
+    $("menuOv").hidden = true; if (statsAuthor && authorKey(statsAuthor) === k) drawAuthorPhoto(statsAuthor);
+  };
+}
+let authorRun = null;
+function openAuthorPhotosMenu(){
+  const byKey = new Map(); for (const b of state.books) if (b.author && b.author.trim()) { const k = authorKey(b.author); if (!byKey.has(k)) byKey.set(k, b.author.trim()); }
+  const names = [...byKey.values()].sort((a, b) => a.localeCompare(b, "it"));
+  $("menu").innerHTML = `<h3>Foto degli autori</h3>
+    <p>Cerco su Wikipedia la foto di ogni autore che non ne ha ancora una. Le foto caricate o scelte da te non vengono mai toccate. Serve internet.</p>
+    <p id="apProg" style="font-weight:600"></p><div class="ok" id="apOk"></div>
+    <div class="actions"><button class="btn ghost" id="apBack">Indietro</button><button class="btn" id="apGo">Cerca le foto (${names.length} autori)</button></div>`;
+  $("apBack").onclick = () => { if (authorRun) authorRun.stop = true; openMenu(); };
+  $("apGo").onclick = async () => {
+    if (authorRun){ authorRun.stop = true; return; }
+    const run = authorRun = { stop: false }; let i = 0, found = 0, had = 0, done = 0;
+    $("apGo").textContent = "Ferma"; $("apOk").textContent = "";
+    const worker = async () => {
+      while (!run.stop && i < names.length){
+        const name = names[i++]; let res = "none"; try { res = await autoAuthorPhoto(name); } catch(e){}
+        if (res === "new") found++; else if (res === "had") had++;
+        done++; if ($("apProg")) $("apProg").textContent = `${done} di ${names.length} · ${found} ${found === 1 ? "foto nuova" : "foto nuove"}`;
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    authorRun = null; Object.keys(aPhotoURLs).forEach(k => dropAuthorURL(k.slice(7)));
+    const miss = done - found - had;
+    if ($("apOk")) $("apOk").textContent = `${run.stop ? "Fermato. " : "Fatto. "}${found} ${found === 1 ? "foto nuova" : "foto nuove"}${had ? `, ${had} ${had === 1 ? "autore aveva" : "autori avevano"} già la foto` : ""}${miss ? `, ${miss} non trovati (per loro usa "Scegli online" nella scheda dell'autore)` : ""}.`;
+    if ($("apGo")) $("apGo").textContent = "Cerca di nuovo";
+  };
+}
 async function drawAuthorPhoto(key){
   const btn = $("aPhoto"); if (!btn) return;
   let url = aPhotoURLs[aPhotoKey(key)];
   if (!url){ try { const blob = await idb.get(aPhotoKey(key)); if (blob){ url = URL.createObjectURL(blob); aPhotoURLs[aPhotoKey(key)] = url; } } catch(e){} }
+  if (!url){ const u = authorUrlMap()[authorKey(key)]; if (u){ url = u; aPhotoURLs[aPhotoKey(key)] = u; } }
   if (statsAuthor !== key || !$("aPhoto")) return;
   btn.classList.toggle("has", !!url);
-  btn.innerHTML = url ? `<img src="${url}" alt="Foto dell'autore">` : `<span class="aphoto-ph">＋<br>Carica una foto</span>`;
+  btn.innerHTML = url ? `<img src="${esc(url)}" alt="Foto dell'autore">` : `<span class="aphoto-ph">＋<br>Carica una foto</span>`;
   $("aPhotoActs").hidden = !url;
+  if ($("aPhotoWeb")) $("aPhotoWeb").hidden = !!url;
 }
 function pickAuthorPhoto(){ $("authorPhotoFile").value = ""; $("authorPhotoFile").click(); }
 $("authorPhotoFile").addEventListener("change", async e => {
   const f = e.target.files && e.target.files[0]; if (!f || !statsAuthor) return;
   const key = statsAuthor;
-  let had = false; try { had = !!(await idb.get(aPhotoKey(key))); } catch(e){}
+  const had = await authorHasPhoto(authorKey(key));
   if (had && !(await askConfirm("Cambiare la foto?", "Sostituirà la foto attuale dell'autore.", "Cambia"))) return;
   try {
     const blob = await photoToBlob(f);
     await idb.set(aPhotoKey(key), blob);
-    if (aPhotoURLs[aPhotoKey(key)]){ URL.revokeObjectURL(aPhotoURLs[aPhotoKey(key)]); delete aPhotoURLs[aPhotoKey(key)]; }
+    { const k = authorKey(key), urls = { ...authorUrlMap() }; delete urls[k]; setMeta("authorPhotoUrls", urls); setAuthorFlags(k, false); }
+    dropAuthorURL(authorKey(key));
     setMeta("lastChangeAt", new Date().toISOString());
     drawAuthorPhoto(key);
   } catch(err){ $("authorSaved").textContent = "Non sono riuscita a usare questa immagine."; }
@@ -802,11 +921,13 @@ $("authorPhotoFile").addEventListener("change", async e => {
 $("viewStats").addEventListener("click", async e => {
   if (e.target.closest("#aPhoto")){ const has = $("aPhoto").classList.contains("has"); if (!has) pickAuthorPhoto(); return; }
   if (e.target.closest("#aPhotoChange")) return pickAuthorPhoto();
+  if (e.target.closest("#aPhotoFind") || e.target.closest("#aPhotoOnline2")) return openAuthorPicker(statsAuthor);
   if (e.target.closest("#aPhotoDel")){
     if (!(await askConfirm("Togliere la foto?", "La foto dell'autore verrà eliminata.", "Togli", true))) return;
     const key = statsAuthor;
     try { await idb.del(aPhotoKey(key)); } catch(err){}
-    if (aPhotoURLs[aPhotoKey(key)]){ URL.revokeObjectURL(aPhotoURLs[aPhotoKey(key)]); delete aPhotoURLs[aPhotoKey(key)]; }
+    { const k = authorKey(key), urls = { ...authorUrlMap() }; delete urls[k]; setMeta("authorPhotoUrls", urls); setAuthorFlags(k, false); }
+    dropAuthorURL(authorKey(key));
     setMeta("lastChangeAt", new Date().toISOString());
     drawAuthorPhoto(key);
   }
@@ -1373,15 +1494,17 @@ async function exportBackup(){
     }
     books.push(copy);
   }
-  const authorPhotos = {};
+  const authorPhotos = {}, authorPhotoUrlsOut = { ...authorUrlMap() };
   const akeys = new Set(state.books.map(b => authorKey(b.author)));
   for (const k of akeys){
     try {
       const blob = await idb.get("author:" + k);
+      const asrc = authorAutoMap()[k] && (getMeta().authorPhotoSrc || {})[k];
+      if (blob && asrc){ authorPhotoUrlsOut[k] = asrc; continue; }
       if (blob) authorPhotos[k] = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
     } catch(e){}
   }
-  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), works: getMeta().works || {}, authorPhotos, books });
+  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), works: getMeta().works || {}, authorPhotos, authorPhotoUrls: authorPhotoUrlsOut, authorAuto: authorAutoMap(), authorPhotoSrc: getMeta().authorPhotoSrc || {}, books });
   const name = backupName();
   const file = new File([payload], name, { type: "application/json" });
   try {
@@ -1457,6 +1580,7 @@ function parseBackup(text){
     const p = {}; for (const [k, v] of Object.entries(data.authorPhotos)) if (typeof v === "string" && /^data:image\//.test(v)) p[k] = v;
     out.authorPhotos = p;
   }
+  for (const f of ["authorPhotoUrls", "authorAuto", "authorPhotoSrc"]) if (data && data[f] && typeof data[f] === "object") out[f] = data[f];
   if (data && data.works && typeof data.works === "object"){
     const w = {}; for (const [k, v] of Object.entries(data.works)) if (typeof v === "string" && v.trim()) w[k] = v;
     out.works = w;
@@ -1487,6 +1611,7 @@ function openMenu(msg){
     <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
     <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
     <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
+    <button class="item" id="mPhotos">Scarica le foto degli autori<small>Da Wikipedia · non tocca le foto scelte da te · serve internet</small></button>
     <button class="item" id="mMissCover">Libri senza copertina<small>${missingCover().length} libri · tocca per vedere quali</small></button>
     <button class="item" id="mMissPub">Libri senza anno di pubblicazione<small>${missingPub().length} libri · tocca per vedere quali</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
@@ -1499,6 +1624,7 @@ function openMenu(msg){
   $("mImport").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
   $("mCsv").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportCSV(); };
   $("mMissCover").onclick = () => openMissing("cover");
+  $("mPhotos").onclick = openAuthorPhotosMenu;
   $("mMissPub").onclick = () => openMissing("pub");
 }
 function missingCover(){ return readList().filter(b => !b.coverUrl && !b.coverLocal); }
@@ -1589,6 +1715,7 @@ async function applyImport(books){
   const goals = books.goals; delete books.goals;
   const works = books.works; delete books.works;
   const authorPhotos = books.authorPhotos; delete books.authorPhotos;
+  const apu = books.authorPhotoUrls, aau = books.authorAuto, asr = books.authorPhotoSrc; delete books.authorPhotoUrls; delete books.authorAuto; delete books.authorPhotoSrc;
   const wish = books.wish; delete books.wish;
   const reading = books.reading; delete books.reading;
   state.books = books;
@@ -1596,7 +1723,10 @@ async function applyImport(books){
   if (goals) setMeta("goals", goals);
   if (works) setMeta("works", works);
   if (authorPhotos) for (const [k, v] of Object.entries(authorPhotos)){ try { if (!(await idb.get("author:" + k))) await idb.set("author:" + k, await (await fetch(v)).blob()); } catch(e){} }
-  Object.keys(aPhotoURLs).forEach(k => { URL.revokeObjectURL(aPhotoURLs[k]); delete aPhotoURLs[k]; });
+  if (apu){ const cur = { ...authorUrlMap() }; for (const [k, v] of Object.entries(apu)){ if (typeof v !== "string" || !/^https:\/\//.test(v) || cur[k]) continue; let has = false; try { has = !!(await idb.get("author:" + k)); } catch(e){} if (!has) cur[k] = v; } setMeta("authorPhotoUrls", cur); }
+  if (aau) setMeta("authorAuto", { ...aau, ...authorAutoMap() });
+  if (asr) setMeta("authorPhotoSrc", { ...asr, ...(getMeta().authorPhotoSrc || {}) });
+  Object.keys(aPhotoURLs).forEach(k => { if (aPhotoURLs[k].startsWith("blob:")) URL.revokeObjectURL(aPhotoURLs[k]); delete aPhotoURLs[k]; });
   fillAuthorNotes();
   if (wish && wish.length){
     for (const w of wish) if (!state.books.some(b => b.id === w.id))
