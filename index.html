@@ -334,7 +334,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
   <button class="card" id="goWish">
     <div class="card-art wish" id="homeWish"></div>
     <div class="card-body">
-      <div class="card-title">Da cercare</div>
+      <div class="card-title" style="font-size:26px">Da cercare <span style="color:var(--muted)">/</span> Da leggere</div>
       <div class="card-sub" id="homeWishSub"></div>
     </div>
     <span class="chev">›</span>
@@ -356,7 +356,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
   <div class="controls" style="padding-left:0;padding-right:0">
     <div class="search">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input class="field" id="wq" type="search" placeholder="Cerca tra i libri da cercare" autocomplete="off">
+      <input class="field" id="wq" type="search" placeholder="Cerca tra i libri da cercare e da leggere" autocomplete="off">
     </div>
   </div>
   <div id="wishMain"></div>
@@ -472,7 +472,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.25";
+const APP_VERSION = "1.26";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -514,7 +514,8 @@ function flipName(name){
 }
 function authorLabel(a){ return String(a || "").split(",").map(flipName).filter(Boolean).join(", "); }
 function sortKey(b){ return (b.finished || String(b.createdAt || "").slice(0,10)) + "|" + (b.createdAt || ""); }
-function readList(){ return state.books.filter(b => !b.reading); }
+function readList(){ return state.books.filter(b => !b.reading && !b.list); }
+function listOf(kind){ return state.books.filter(b => b.list === kind).sort((a,b) => String(a.createdAt||"").localeCompare(String(b.createdAt||""))); }
 function readingList(){ return state.books.filter(b => b.reading).sort((a,b) => String(a.started||a.createdAt||"").localeCompare(String(b.started||b.createdAt||""))); }
 function allTags(){
   const set = new Set();
@@ -785,100 +786,56 @@ const LENS_SVG = `<svg class="lens" viewBox="0 0 100 100" aria-hidden="true">
   <path d="M24 32 A18 18 0 0 1 36 21" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="4" stroke-linecap="round"/>
 </svg>`;
 function renderWish(){
-  const all = [...(state.wish || [])].sort((a,b) => String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
-  const n = all.length;
-  $("homeWishSub").textContent = n ? `${n} ${n===1?"libro":"libri"} da cercare` : "Segna i libri da trovare";
+  const wish = listOf("wish"), toread = listOf("toread");
+  const nW = wish.length, nT = toread.length;
+  $("homeWishSub").textContent = (nW || nT) ? `${nW} da cercare · ${nT} da leggere` : "Libri da trovare e da leggere";
   const deco = [
     { id:"d1", title:"Da cercare", author:"a", color:"#2c5d63" }, { id:"d2", title:"Libro", author:"b", color:"#c49a3a" },
     { id:"d3", title:"Nuovo", author:"c", color:"#7a2e2a" }, { id:"d4", title:"Desiderio", author:"d", color:"#e6d9bd" },
     { id:"d5", title:"Lista", author:"e", color:"#23395b" }, { id:"d6", title:"Trovare", author:"f", color:"#5a3550" } ];
-  const shelfBooks = all.length ? all.slice(-6) : deco;
-  $("homeWish").innerHTML = shelfBooks.map(b => `<div style="--row:78px;--s:.42">${spineHTML(b)}</div>`).join("") + LENS_SVG;
-  const list = all.filter(b => !wishQ || norm(b.title).includes(norm(wishQ)) || norm(b.author).includes(norm(wishQ)));
-  let html;
-  if (!n) html = `<div class="welcome"><h2>Libri da cercare</h2><p>Qui segni i libri che vuoi trovare o comprare. Quando ne leggi uno, lo sposti nella libreria con un tocco.</p><div class="actions"><button class="btn" id="wFirst">Aggiungi un libro</button></div></div>`;
-  else if (!list.length) html = `<p class="nores">Nessun libro corrisponde alla ricerca</p>`;
-  else html = `<section class="year-sec"><div class="year-head"><h2>Da cercare</h2><span>${wishQ ? `${list.length} di ${n}` : `${n} ${n===1?"libro":"libri"}`}</span></div>
-    <div class="case"><div class="shelf">${list.map(b => `<div class="slot">${spineHTML(b, b.id === state.newWishId ? "new" : "")}</div>`).join("")}</div></div></section>`;
-  $("wishMain").innerHTML = html;
-  state.newWishId = null;
+  const shelfBooks = [...wish, ...toread].slice(-6);
+  $("homeWish").innerHTML = [...shelfBooks, ...deco].slice(0, 6).map(b => `<div style="--row:78px;--s:.42">${spineHTML(b)}</div>`).join("") + LENS_SVG;
+  const q = norm(wishQ);
+  const f = list => list.filter(b => !q || norm(b.title).includes(q) || norm(b.author).includes(q) || (b.tags || []).some(t => norm(t).includes(q)));
+  const section = (kind, label, list, total, emptyTxt) => `
+    <section class="year-sec"><div class="year-head"><h2>${label}</h2><span>${q ? `${list.length} di ${total}` : `${total} ${total===1?"libro":"libri"}`}</span><button class="linkbtn" data-add="${kind}" style="margin-left:auto">+ Aggiungi</button></div>
+    <div class="case"><div class="shelf">${list.length
+      ? list.map(b => `<div class="slot">${spineHTML(b, b.id === state.newId ? "new" : "")}</div>`).join("")
+      : `<div class="empty-row">${q ? "Nessun libro corrisponde alla ricerca" : emptyTxt}</div>`}</div></div></section>`;
+  $("wishMain").innerHTML =
+    section("wish", "Da cercare", f(wish), nW, "Qui segni i libri da trovare o comprare") +
+    section("toread", "Da leggere", f(toread), nT, "Quando trovi un libro, spostalo qui");
 }
 $("wq").addEventListener("input", e => { wishQ = e.target.value.trim(); renderWish(); });
 $("wishMain").addEventListener("click", e => {
-  if (e.target.id === "wFirst") return openWishForm(null);
-  const sp = e.target.closest(".spine"); if (sp) openWishDetail(sp.dataset.id);
+  const add = e.target.closest("[data-add]"); if (add) return openForm(null, { list: add.dataset.add });
+  const sp = e.target.closest(".spine"); if (sp) openDetail(sp.dataset.id);
 });
-function openWishForm(item){
-  $("menu").innerHTML = `
-    <h3>${item ? "Modifica" : "Libro da cercare"}</h3>
-    <label for="wTitle">Titolo</label><input class="field" id="wTitle" autocomplete="off" value="${esc(item?.title || "")}">
-    <label for="wAuthor">Autore</label><input class="field" id="wAuthor" list="authorList" autocomplete="off" value="${esc(item?.author || "")}">
-    <label for="wNotes">Note</label><textarea class="field notesarea" id="wNotes" style="min-height:110px" placeholder="Dove cercarlo, edizione, prezzo, chi te l'ha consigliato…">${esc(item?.notes || "")}</textarea>
-    <div class="err" id="wErr"></div>
-    <div class="actions"><button class="btn ghost" id="wNo">Annulla</button><button class="btn" id="wYes">${item ? "Salva" : "Aggiungi"}</button></div>`;
-  $("menuOv").hidden = false;
-  setTimeout(() => $("wTitle").focus(), 50);
-  $("wNo").onclick = () => { $("menuOv").hidden = true; };
-  $("wYes").onclick = async () => {
-    const title = $("wTitle").value.trim(), author = $("wAuthor").value.trim();
-    if (!title || !author){ $("wErr").textContent = "Titolo e autore sono obbligatori."; return; }
-    if (item && !(await askConfirm("Salvare le modifiche?", `Aggiorno «${title}».`, "Salva"))) return;
-    const data = { title, author, notes: $("wNotes").value.trim() || null };
-    try {
-      if (item){ const i = state.wish.findIndex(w => w.id === item.id); state.wish[i] = { ...state.wish[i], ...data, updatedAt: new Date().toISOString() }; }
-      else { const id = "w" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); state.newWishId = id; state.wish.push({ id, ...data, color: null, pages: null, createdAt: new Date().toISOString() }); }
-      persistWish(); $("menuOv").hidden = true; render();
-    } catch(e){ $("wErr").textContent = errText(e); }
-  };
+// Vecchia lista "Da cercare" (versioni precedenti): diventa schede complete
+function migrateOldWish(){
+  const old = loadWish();
+  if (!old.length) return;
+  for (const w of old){
+    if (state.books.some(b => b.id === w.id)) continue;
+    state.books.push({ id: w.id, title: w.title, author: w.author, year: null, list: "wish", notes: w.notes || null, color: w.color || null, createdAt: w.createdAt || new Date().toISOString() });
+  }
+  try { persist(); localStorage.removeItem(WKEY); } catch(e){}
 }
-function openWishDetail(id){
-  const w = state.wish.find(x => x.id === id); if (!w) return;
-  $("menu").innerHTML = `
-    <div class="mini">
-      <div style="--row:150px;--s:1">${spineHTML(w)}</div>
-      <div style="min-width:0"><h3 style="margin-bottom:8px">${esc(w.title)}</h3><div style="color:var(--muted);font-size:16px">${esc(w.author)}</div>
-      <div class="chips" style="margin:12px 0 0"><span class="chip">Da cercare</span></div></div>
-    </div>
-    ${w.notes ? `<div class="wish-note">${esc(w.notes)}</div>` : ""}
-    <div class="err" id="wdErr"></div>
-    <button class="btn" id="wdStart" style="width:100%;margin-top:16px">Inizio a leggerlo</button>
-    <button class="btn ghost" id="wdRead" style="width:100%;margin-top:8px">L'ho già letto: spostalo in libreria</button>
-    <div class="actions">
-      <button class="btn ghost" id="wdDel">Elimina</button>
-      <button class="btn ghost" id="wdEdit">Modifica</button>
-      <button class="btn ghost" id="wdClose">Chiudi</button>
-    </div>`;
-  $("menuOv").hidden = false;
-  $("wdClose").onclick = () => { $("menuOv").hidden = true; };
-  $("wdEdit").onclick = () => openWishForm(w);
-  $("wdStart").onclick = () => { $("menuOv").hidden = true; openForm(null, { reading: true, title: w.title, author: w.author, fromWish: w.id }); };
-  $("wdDel").onclick = async () => {
-    if (!(await askConfirm("Eliminare dalla lista?", `«${w.title}» verrà tolto dai libri da cercare.`, "Elimina", true))) return;
-    state.wish = state.wish.filter(x => x.id !== id);
-    try { persistWish(); } catch(e){}
-    $("menuOv").hidden = true; render();
+async function moveList(id, to){
+  const i = state.books.findIndex(x => x.id === id); if (i < 0) return;
+  const b = state.books[i];
+  const msgs = {
+    toread: ["Spostare in Da leggere?", `«${b.title}» passa dai libri da cercare a quelli da leggere.`, "Sposta"],
+    reading: ["Iniziare a leggerlo?", `«${b.title}» passa in Sto leggendo.`, "Inizia"],
   };
-  $("wdRead").onclick = () => {
-    $("menu").innerHTML = `
-      <h3>Spostalo in libreria</h3>
-      <p style="color:var(--muted);line-height:1.5">«${esc(w.title)}» di ${esc(w.author)}</p>
-      <label for="mvYear">Anno di lettura</label>
-      <input class="field" id="mvYear" type="number" inputmode="numeric" min="1900" max="2100" value="${NOW_YEAR}">
-      <div class="err" id="mvErr"></div>
-      <div class="actions"><button class="btn ghost" id="mvNo">Annulla</button><button class="btn" id="mvYes">Sposta</button></div>`;
-    $("mvNo").onclick = () => openWishDetail(id);
-    $("mvYes").onclick = async () => {
-      const year = parseInt($("mvYear").value, 10);
-      if (!year || year < 1900 || year > 2100){ $("mvErr").textContent = "Inserisci un anno valido."; return; }
-      if (!(await askConfirm("Spostare nella libreria?", `«${w.title}» verrà messo sullo scaffale del ${year} e tolto dai libri da cercare.`, "Sposta"))) return;
-      try {
-        await writeBook({ title: w.title, author: w.author, year, pages: null, finished: null, rating: null, color: w.color || null,
-          notes: w.notes || null, quotes: null, coverUrl: null, coverLocal: false, pubYear: null, authorSort: null, createdAt: new Date().toISOString() }, null);
-        state.wish = state.wish.filter(x => x.id !== id); persistWish();
-        $("menuOv").hidden = true; state.view = year; showView("libreria");
-      } catch(e){ $("mvErr").textContent = errText(e); }
-    };
-  };
+  const [t, x, ok] = msgs[to];
+  if (!(await askConfirm(t, x, ok))) return;
+  const nb = { ...b, updatedAt: new Date().toISOString() };
+  if (to === "toread"){ nb.list = "toread"; }
+  else { delete nb.list; nb.reading = true; nb.started = new Date().toISOString().slice(0,10); }
+  state.books[i] = nb; persist();
+  closeDetail();
+  if (to === "reading") showView("home"); else render();
 }
 
 /* ---------- Sto leggendo ---------- */
@@ -1150,7 +1107,7 @@ async function exportBackup(){
     }
     books.push(copy);
   }
-  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), wish: state.wish, books });
+  const payload = JSON.stringify({ app: "libreria", version: 3, exportedAt: new Date().toISOString(), goals: getGoals(), books });
   const name = backupName();
   const file = new File([payload], name, { type: "application/json" });
   try {
@@ -1197,7 +1154,7 @@ function parseBackup(text){
   const out = [];
   for (const b of list){
     if (!b || typeof b.title !== "string" || typeof b.author !== "string") continue;
-    const year = parseInt(b.year, 10); if (!year && !b.reading) continue;
+    const year = parseInt(b.year, 10); if (!year && !b.reading && !b.list) continue;
     out.push({
       id: String(b.id || ("b" + Math.random().toString(36).slice(2,10))),
       title: b.title.trim(), author: b.author.trim(), year,
@@ -1208,6 +1165,7 @@ function parseBackup(text){
       mynotes: typeof b.mynotes === "string" ? b.mynotes : null,
       started: typeof b.started === "string" ? b.started.slice(0,10) : null,
       ...(b.reading ? { reading: true, year: null } : {}),
+      ...(b.list === "wish" || b.list === "toread" ? { list: b.list, year: null } : {}),
       tags: Array.isArray(b.tags) ? [...new Set(b.tags.map(cleanTag).filter(Boolean))].slice(0, 20) : null,
       spineW: [22,32,44,58].includes(Number(b.spineW)) ? Number(b.spineW) : null,
       spineH: [0.7,0.83,0.96].includes(Number(b.spineH)) ? Number(b.spineH) : null,
@@ -1350,7 +1308,11 @@ async function applyImport(books){
   try { persist(); } catch(e){ state.books = prev; openMenu(); $("mErr").textContent = errText(e); return; }
   if (goals) setMeta("goals", goals);
   fillAuthorNotes();
-  if (wish){ state.wish = wish; try { persistWish(); } catch(e){} }
+  if (wish && wish.length){
+    for (const w of wish) if (!state.books.some(b => b.id === w.id))
+      state.books.push({ id: w.id, title: w.title, author: w.author, year: null, list: "wish", notes: w.notes || null, createdAt: w.createdAt || new Date().toISOString() });
+    try { persist(); } catch(e){}
+  }
   if (reading && reading.length){
     for (const r of reading) if (!state.books.some(b => b.id === r.id))
       state.books.push({ id: r.id, title: r.title, author: r.author, year: null, reading: true, pages: r.pages || null, started: r.startedAt || null, notes: r.notes || null, createdAt: new Date().toISOString() });
@@ -1398,12 +1360,15 @@ function drawSwatches(){
 function openForm(book, opts = {}){
   state.editing = book ? book.id : null;
   state.formReading = book ? !!book.reading : !!opts.reading;
-  state.formFromWish = opts.fromWish || null;
-  $("formTitle").textContent = book ? "Modifica libro" : state.formReading ? "Inizio a leggere" : "Nuovo libro";
-  $("fSave").textContent = book ? "Salva" : state.formReading ? "Inizia a leggere" : "Metti sullo scaffale";
-  $("fYearBox").hidden = state.formReading;
-  $("fYearBox").parentNode.classList.toggle("single", state.formReading);
-  $("fDoneBox").hidden = state.formReading;
+  state.formList = book ? (book.list || null) : (opts.list || null);
+  const notRead = state.formReading || !!state.formList;
+  const newTitle = state.formReading ? "Inizio a leggere" : state.formList === "wish" ? "Libro da cercare" : state.formList === "toread" ? "Libro da leggere" : "Nuovo libro";
+  const newBtn = state.formReading ? "Inizia a leggere" : state.formList ? "Aggiungi alla lista" : "Metti sullo scaffale";
+  $("formTitle").textContent = book ? "Modifica libro" : newTitle;
+  $("fSave").textContent = book ? "Salva" : newBtn;
+  $("fYearBox").hidden = notRead;
+  $("fYearBox").parentNode.classList.toggle("single", notRead);
+  $("fDoneBox").hidden = notRead;
   $("fTitle").value = book?.title || opts.title || "";
   $("fAuthor").value = book?.author || opts.author || (state.author || "");
   $("fAuthorSort").value = book?.authorSort || authorLabel($("fAuthor").value);
@@ -1583,21 +1548,23 @@ $("formOv").addEventListener("click", e => { if (e.target.id === "formOv") close
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const title = $("fTitle").value.trim(), author = $("fAuthor").value.trim();
-  const reading = state.formReading;
-  const year = reading ? null : parseInt($("fYear").value, 10);
+  const reading = state.formReading, list = state.formList;
+  const notRead = reading || !!list;
+  const year = notRead ? null : parseInt($("fYear").value, 10);
   if (!title || !author){ $("fErr").textContent = "Titolo e autore sono obbligatori."; return; }
-  if (!reading && (!year || year < 1900 || year > 2100)){ $("fErr").textContent = "Inserisci un anno di lettura valido."; return; }
+  if (!notRead && (!year || year < 1900 || year > 2100)){ $("fErr").textContent = "Inserisci un anno di lettura valido."; return; }
   const prev = state.editing ? state.books.find(b => b.id === state.editing) : null;
   const data = {
     title, author, year,
     reading: reading || undefined,
+    list: list || undefined,
     started: prev?.started || (reading ? new Date().toISOString().slice(0,10) : null),
     authorSort: (() => { const v = $("fAuthorSort").value.trim(); return v && v !== authorLabel(author) ? v : null; })(),
     pages: parseInt($("fPages").value, 10) || null,
     tags: state.ftags.length ? [...state.ftags] : null,
     pubYear: (() => { const v = parseInt($("fPub").value, 10); return v > 0 && v <= 2100 ? v : null; })(),
-    finished: reading ? null : ($("fDate").value || null),
-    rating: reading ? null : (state.rating || null),
+    finished: notRead ? null : ($("fDate").value || null),
+    rating: notRead ? null : (state.rating || null),
     color: state.color || null,
     spineW: state.spineW || null,
     spineH: state.spineH || null,
@@ -1612,16 +1579,17 @@ $("form").addEventListener("submit", async e => {
   const btn = $("fSave"); btn.disabled = true;
   try {
     if (data.reading === undefined) delete data.reading;
+    if (data.list === undefined) delete data.list;
     const isNew = !state.editing;
     await writeBook(data, state.editing);
     await applyPendingCover(isNew ? state.books[state.books.length - 1].id : state.editing);
     if (reading){
       const nid = isNew ? state.books[state.books.length - 1].id : state.editing;
-      if (isNew && state.formFromWish){ state.wish = state.wish.filter(w => w.id !== state.formFromWish); try { persistWish(); } catch(e){} }
       closeForm(); render();
       if (isNew){ showView("home"); openDetail(nid); }
       return;
     }
+    if (list){ closeForm(); render(); return; }
     if (state.view !== "all" && state.view !== year) state.view = year;
     closeForm(); render();
   } catch(err){ $("fErr").textContent = errText(err); }
@@ -1693,7 +1661,7 @@ function openDetail(id){
   const b = state.books.find(x => x.id === id); if (!b) return;
   detailId = id;
   const startedTxt = b.started ? (() => { const d = Math.max(0, Math.floor((Date.now() - new Date(b.started + "T12:00:00")) / 86400000)); return d === 0 ? "iniziato oggi" : d === 1 ? "iniziato ieri" : `iniziato ${d} giorni fa`; })() : "";
-  const chips = b.reading ? ["Sto leggendo" + (startedTxt ? " · " + startedTxt : "")] : [`Letto nel ${b.year}`];
+  const chips = b.reading ? ["Sto leggendo" + (startedTxt ? " · " + startedTxt : "")] : b.list === "wish" ? ["Da cercare"] : b.list === "toread" ? ["Da leggere"] : [`Letto nel ${b.year}`];
   $("det").innerHTML = `
     <div class="mini">
       <div id="dCover"></div>
@@ -1706,6 +1674,8 @@ function openDetail(id){
       </div>
     </div>
     ${b.reading ? `<button class="btn" id="dFinish" style="width:100%;margin-top:14px">L'ho finito! Mettilo sullo scaffale</button>` : ""}
+    ${b.list === "wish" ? `<button class="btn" id="dToRead" style="width:100%;margin-top:14px">Trovato! Spostalo in Da leggere</button>` : ""}
+    ${b.list === "toread" ? `<button class="btn" id="dStart" style="width:100%;margin-top:14px">Inizio a leggerlo</button>` : ""}
     <label for="dNotes">Trama</label>
     <textarea class="field notesarea" id="dNotes" placeholder="Di cosa parla il libro…">${esc(b.notes || "")}</textarea>
     <div class="saved" id="dSavedNotes"></div>
@@ -1742,10 +1712,12 @@ function openDetail(id){
 
   $("dClose").onclick = closeDetail;
   if (b.reading) $("dFinish").onclick = () => { flushNotes(); closeDetail(); openFinish(id); };
+  if (b.list === "wish") $("dToRead").onclick = () => { flushNotes(); moveList(id, "toread"); };
+  if (b.list === "toread") $("dStart").onclick = () => { flushNotes(); moveList(id, "reading"); };
   $("dEdit").onclick = () => { flushNotes(); openForm(state.books.find(x => x.id === id)); };
   $("dDel").onclick = async () => {
     const cur = state.books.find(x => x.id === id);
-    if (!(await askConfirm("Eliminare il libro?", `«${cur ? cur.title : ""}» verrà tolto dalla libreria, con copertina, trama e note sull'autore.`, "Elimina", true))) return;
+    if (!(await askConfirm("Eliminare il libro?", `«${cur ? cur.title : ""}» verrà eliminato, con copertina, trama e note sull'autore.`, "Elimina", true))) return;
     try { notesTimer && clearTimeout(notesTimer); notesTimer = null; await removeBook(id); closeDetail(); } catch(err){ $("dErr").textContent = errText(err); }
   };
 }
@@ -1766,7 +1738,7 @@ $("detOv").addEventListener("click", e => {
 });
 
 /* ---------- Events ---------- */
-$("addBtn").addEventListener("click", () => currentView === "dacercare" ? openWishForm(null) : openForm(null));
+$("addBtn").addEventListener("click", () => currentView === "dacercare" ? openForm(null, { list: "wish" }) : openForm(null));
 $("main").addEventListener("click", e => {
   if (e.target.id === "wAdd") return openForm(null);
   if (e.target.id === "wImport"){ $("importFile").value = ""; return $("importFile").click(); }
@@ -1780,7 +1752,8 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("cfOv")
 
 $("credits").innerHTML = `<b>La mia libreria</b><br>Versione ${APP_VERSION} · by Massimo Merigo`;
 state.books = loadBooks();
-state.wish = loadWish();
+state.wish = [];
+migrateOldWish();
 migrateOldReading();
 fillAuthorNotes();
 if (!getMeta().firstSeenAt) setMeta("firstSeenAt", new Date().toISOString());
