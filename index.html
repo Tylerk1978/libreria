@@ -488,7 +488,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.28";
+const APP_VERSION = "1.29";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -630,9 +630,10 @@ $("homeBanner").addEventListener("click", async e => {
   if (e.target.id === "bkLater"){ setMeta("snoozeUntil", new Date(Date.now() + 7 * 86400000).toISOString()); render(); }
   if (e.target.id === "bkNow"){ openMenu(); $("mOk").textContent = await exportBackup(); render(); }
 });
-$("goStats").addEventListener("click", () => { statsSub = null; statsOpen = null; showView("statistiche"); });
+$("goStats").addEventListener("click", () => { statsSub = null; statsOpen = null; statsAuthor = null; showView("statistiche"); });
 $("goWish").addEventListener("click", () => showView("dacercare"));
 $("backBtn").addEventListener("click", () => {
+  if (currentView === "statistiche" && statsAuthor){ statsAuthor = null; renderStats(); window.scrollTo(0, 0); return; }
   if (currentView === "statistiche" && statsSub){ statsSub = null; statsOpen = null; renderStats(); window.scrollTo(0, 0); return; }
   showView("home");
 });
@@ -674,7 +675,7 @@ function tagStatsHTML(){
       <span class="n">${c}</span>
     </button>`).join("") + `<p class="note">Tocca un'etichetta per vedere i suoi libri.</p>`;
 }
-let statsSub = null, statsOpen = null;
+let statsSub = null, statsOpen = null, statsAuthor = null, authorTimer = null;
 function groupBy(kind){
   const m = new Map();
   for (const b of readList()){
@@ -706,8 +707,52 @@ function groupHTML(kind){
     </div>`;
   }).join("") || `<p class="note">Ancora nessun libro registrato.</p>`;
 }
+function authorPageHTML(key){
+  const k = authorKey(key);
+  const books = readList().filter(b => authorKey(b.author) === k).sort((a,b) => (Number(b.year) - Number(a.year)) || a.title.localeCompare(b.title, "it"));
+  const others = state.books.filter(b => authorKey(b.author) === k && (b.reading || b.list));
+  const label = (books.find(x => x.authorSort) || {}).authorSort || authorLabel(key);
+  const note = (state.books.filter(b => authorKey(b.author) === k && b.quotes).sort((a,b) => String(b.updatedAt||"").localeCompare(String(a.updatedAt||"")))[0] || {}).quotes || "";
+  const rated = books.filter(b => b.rating);
+  const avg = rated.length ? Math.round(rated.reduce((s,b) => s + b.rating, 0) / rated.length * 10) / 10 : 0;
+  return `
+    <button class="linkbtn" id="authorBack" style="text-decoration:none;font-size:15px">‹ Per autore</button>
+    <h2 style="margin-top:12px;margin-bottom:4px">${esc(label)}</h2>
+    <p class="note" style="text-align:left;margin:0 4px 16px">${books.length} ${books.length===1?"libro letto":"libri letti"}${avg ? ` · voto medio ${fmtRating(avg)} ★` : ""}${others.length ? ` · ${others.length} in lettura o in lista` : ""}</p>
+    <label for="authorInfo" style="display:block;color:var(--muted);font-size:13px;margin:0 4px 6px">Info sull'autore</label>
+    <textarea class="field notesarea" id="authorInfo" placeholder="Incolla qui biografia, altre opere, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
+    <div class="saved" id="authorSaved"></div>
+    <p class="note" style="text-align:left;margin:4px 4px 0">Le info compaiono anche nel riquadro "L'autore" di tutti i suoi libri.</p>
+    <h2>I suoi libri</h2>
+    <div class="grp-list" style="border-top:1px solid var(--accent);border-radius:14px">
+      ${books.map(b => `<button class="grp-book" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span>letto nel ${b.year}${b.pubYear ? ` · pubblicato nel ${b.pubYear}` : ""}${b.rating ? " · " + fmtRating(b.rating) + " ★" : ""}</span></button>`).join("")}
+      ${others.map(b => `<button class="grp-book" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span>${b.reading ? "sto leggendo" : b.list === "wish" ? "da cercare" : "da leggere"}</span></button>`).join("")}
+      <button class="linkbtn grp-shelf" data-g="${esc(key)}">Vedi sullo scaffale ›</button>
+    </div>`;
+}
+function saveAuthorInfo(key, text){
+  const k = authorKey(key), now = new Date().toISOString(), v = text.trim() || null;
+  let n = 0;
+  state.books = state.books.map(b => { if (authorKey(b.author) !== k || (b.quotes || null) === v) return b; n++; return { ...b, quotes: v, updatedAt: now }; });
+  if (n) persist();
+  return n;
+}
 function renderStats(){
   const n = readList().length;
+  if (statsSub === "autore" && statsAuthor){
+    $("viewStats").innerHTML = authorPageHTML(statsAuthor);
+    const ta = $("authorInfo");
+    const grow = () => { ta.style.height = "auto"; ta.style.height = Math.max(140, ta.scrollHeight + 2) + "px"; };
+    grow();
+    ta.addEventListener("input", () => {
+      grow(); $("authorSaved").textContent = "";
+      clearTimeout(authorTimer);
+      const key = statsAuthor;
+      authorTimer = setTimeout(() => { authorTimer = null; try { saveAuthorInfo(key, ta.value); $("authorSaved").textContent = "Salvato"; } catch(e){ $("authorSaved").textContent = errText(e); } }, 600);
+    });
+    ta.addEventListener("blur", () => { if (authorTimer){ clearTimeout(authorTimer); authorTimer = null; try { saveAuthorInfo(statsAuthor, ta.value); $("authorSaved").textContent = "Salvato"; } catch(e){} } });
+    return;
+  }
   if (statsSub){
     const isG = statsSub === "genere";
     const groups = groupBy(statsSub);
@@ -716,7 +761,7 @@ function renderStats(){
       <div class="sechead" style="margin-top:12px"><h2>${isG ? "Per genere" : "Per autore"}</h2>${isG ? `<button class="btn ghost small" id="tagManage">Gestisci generi</button>` : ""}</div>
       <p class="note" style="text-align:left;margin:0 4px 12px">${isG
         ? `${groups.filter(g => g.key !== "Senza genere").length} generi. Un libro con più generi compare in ognuno.`
-        : `${groups.length} autori, dal più letto.`} Tocca una riga per vedere i libri.</p>
+        : `${groups.length} autori, dal più letto.`} ${isG ? "Tocca una riga per vedere i libri." : "Tocca un autore per aprire la sua pagina."}</p>
       ${groupHTML(statsSub)}`;
     return;
   }
@@ -754,7 +799,9 @@ $("viewStats").addEventListener("click", e => {
     if (statsSub === "genere"){ if (k !== "Senza genere") state.tag = k; } else state.author = k;
     return showView("libreria");
   }
+  if (e.target.closest("#authorBack")){ statsAuthor = null; renderStats(); window.scrollTo(0, 0); return; }
   const g = e.target.closest(".grow");
+  if (g && statsSub === "autore"){ statsAuthor = g.dataset.g; renderStats(); window.scrollTo(0, 0); return; }
   if (g){ const key = statsSub + ":" + g.dataset.g; statsOpen = statsOpen === key ? null : key; renderStats(); return; }
   const r = e.target.closest(".yrow"); if (!r) return;
   state.view = Number(r.dataset.y); state.q = ""; state.author = ""; state.tag = ""; $("q").value = "";
