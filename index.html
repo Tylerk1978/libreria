@@ -293,6 +293,13 @@ textarea.field{min-height:80px;resize:vertical}
 .picks button:hover,.picks button:focus-visible{border-color:var(--accent);outline:none}
 .picks img{width:100%;height:100%;object-fit:cover;display:block}
 .hint{color:var(--muted);font-size:13px;margin-top:8px}
+.sechead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:28px 4px 12px}
+.stats .sechead h2{margin:0}
+.linkbtn{background:none;border:0;color:var(--accent);font-size:13px;padding:6px 0 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.tmrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--field);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-top:10px}
+.tmrow .tmname{flex:1 1 120px;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tmrow .tmn{color:var(--muted);font-size:13px;margin-right:4px}
+.tmrow input.field{flex:1 1 160px;padding:8px 12px}
 .hint:empty{display:none}
 textarea.notesarea{min-height:200px;font-size:12px;line-height:1.55;text-align:justify;hyphens:auto;-webkit-hyphens:auto}
 textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
@@ -407,6 +414,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
       <input class="field" id="fTagNew" placeholder="Nuova etichetta, es. giallo" autocomplete="off" style="flex:1">
       <button type="button" class="btn ghost small" id="fTagAdd">Aggiungi</button>
     </div>
+    <button type="button" class="linkbtn" id="fTagManage">Modifica o elimina etichette</button>
     <label for="fPub">Anno di pubblicazione</label>
     <div style="display:flex;gap:8px">
       <input class="field" id="fPub" type="number" inputmode="numeric" min="1" max="2100" placeholder="Es. 1966" style="flex:1">
@@ -464,7 +472,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.24";
+const APP_VERSION = "1.25";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -639,7 +647,7 @@ function tagStatsHTML(){
   const rows = Object.entries(m).sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0], "it"));
   if (!rows.length) return "";
   const max = Math.max(...rows.map(r => r[1]));
-  return `<h2>Per etichetta</h2>` + rows.map(([t,c]) => `
+  return `<div class="sechead"><h2>Per etichetta</h2><button class="btn ghost small" id="tagManage">Gestisci</button></div>` + rows.map(([t,c]) => `
     <button class="yrow tagrow" data-tag="${esc(t)}">
       <span class="y" style="font-size:16px;font-family:Inter,sans-serif;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t)}</span>
       <span class="track"><span class="fill" style="display:block;width:${Math.max(3, c / max * 100)}%"></span></span>
@@ -665,6 +673,7 @@ function renderStats(){
 }
 $("viewStats").addEventListener("click", e => {
   if (e.target.closest("#goalSet")) return openGoal();
+  if (e.target.closest("#tagManage")) return openTagManager();
   const tr = e.target.closest(".tagrow");
   if (tr){ state.tag = tr.dataset.tag; state.view = "all"; state.q = ""; state.author = ""; $("q").value = ""; return showView("libreria"); }
   const r = e.target.closest(".yrow"); if (!r) return;
@@ -1159,12 +1168,12 @@ async function exportBackup(){
   return "Backup scaricato (" + name + ").";
 }
 async function exportCSV(){
-  const cols = ["Anno di lettura","Titolo","Autore","Anno di pubblicazione","Voto","Pagine","Iniziato il","Finito il","Etichette","Trama","L'autore"];
+  const cols = ["Anno di lettura","Titolo","Autore","Anno di pubblicazione","Voto","Pagine","Iniziato il","Finito il","Etichette","Trama","L'autore","Note"];
   const fmtD = d => d ? d.split("-").reverse().join("/") : "";
   const rows = readList()
     .sort((a,b) => (Number(b.year) - Number(a.year)) || sortKey(a).localeCompare(sortKey(b)))
     .map(b => [b.year, b.title, b.author, b.pubYear || "", b.rating ? String(b.rating).replace(".", ",") : "", b.pages || "",
-               fmtD(b.started), fmtD(b.finished), (b.tags || []).join(", "), b.notes || "", b.quotes || ""]);
+               fmtD(b.started), fmtD(b.finished), (b.tags || []).join(", "), b.notes || "", b.quotes || "", b.mynotes || ""]);
   const cell = v => { const t = String(v ?? ""); return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
   const csv = "\ufeff" + [cols, ...rows].map(r => r.map(cell).join(";")).join("\r\n");
   const name = "diario-di-lettura-" + new Date().toISOString().slice(0,10) + ".csv";
@@ -1196,6 +1205,7 @@ function parseBackup(text){
       rating: Math.round(Math.min(5, Math.max(0, Number(b.rating) || 0)) * 2) / 2 || null, color: typeof b.color === "string" && /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : null,
       notes: typeof b.notes === "string" ? b.notes : null,
       quotes: typeof b.quotes === "string" ? b.quotes : null,
+      mynotes: typeof b.mynotes === "string" ? b.mynotes : null,
       started: typeof b.started === "string" ? b.started.slice(0,10) : null,
       ...(b.reading ? { reading: true, year: null } : {}),
       tags: Array.isArray(b.tags) ? [...new Set(b.tags.map(cleanTag).filter(Boolean))].slice(0, 20) : null,
@@ -1490,6 +1500,76 @@ function addNewTag(){
   $("fTagNew").value = ""; drawTagPick();
 }
 $("fTagAdd").addEventListener("click", addNewTag);
+$("fTagManage").addEventListener("click", () => openTagManager());
+
+/* ---------- Gestione etichette ---------- */
+function tagCounts(){
+  const m = {};
+  for (const b of state.books) for (const t of b.tags || []) m[t] = (m[t] || 0) + 1;
+  return m;
+}
+function applyTagChange(from, to){
+  const now = new Date().toISOString();
+  const prev = state.books;
+  let n = 0;
+  state.books = state.books.map(b => {
+    if (!(b.tags || []).includes(from)) return b;
+    n++;
+    const tags = [...new Set(b.tags.map(t => t === from ? to : t).filter(Boolean))];
+    return { ...b, tags: tags.length ? tags : null, updatedAt: now };
+  });
+  try { persist(); } catch(e){ state.books = prev; throw e; }
+  state.ftags = [...new Set(state.ftags.map(t => t === from ? to : t).filter(Boolean))];
+  if (state.tag === from) state.tag = to || "";
+  render();
+  if (!$("formOv").hidden) drawTagPick();
+  return n;
+}
+function openTagManager(){
+  const counts = tagCounts();
+  const tags = Object.keys(counts).sort((a,b) => a.localeCompare(b, "it"));
+  const nb = c => `${c} ${c === 1 ? "libro" : "libri"}`;
+  const row = t => `<div class="tmrow" data-t="${esc(t)}"><span class="tmname">${esc(t)}</span><span class="tmn">${nb(counts[t])}</span>
+      <button type="button" class="btn ghost small" data-act="ren">Rinomina</button>
+      <button type="button" class="btn ghost small" data-act="del">Elimina</button></div>`;
+  $("menu").innerHTML = `
+    <h3>Etichette</h3>
+    <p>Rinomina o elimina un'etichetta: la modifica vale per tutti i libri che la usano. I libri restano dove sono.</p>
+    <div id="tmList">${tags.length ? tags.map(row).join("") : `<p>Non hai ancora creato etichette.</p>`}</div>
+    <div class="err" id="tmErr"></div>
+    <div class="actions"><button type="button" class="btn" id="tmClose">Fatto</button></div>`;
+  $("menuOv").hidden = false;
+  $("tmClose").onclick = () => $("menuOv").hidden = true;
+  $("tmList").onclick = async e => {
+    const btn = e.target.closest("button[data-act]"); if (!btn) return;
+    const r = btn.closest(".tmrow"); const t = r.dataset.t;
+    $("tmErr").textContent = "";
+    if (btn.dataset.act === "ren"){
+      r.innerHTML = `<input class="field" maxlength="30" autocomplete="off" value="${esc(t)}">
+        <button type="button" class="btn ghost small" data-act="cancel">Annulla</button>
+        <button type="button" class="btn small" data-act="save">Salva</button>`;
+      const inp = r.querySelector("input"); inp.focus(); inp.select();
+      inp.onkeydown = ev => { if (ev.key === "Enter"){ ev.preventDefault(); r.querySelector('[data-act="save"]').click(); } if (ev.key === "Escape"){ ev.stopPropagation(); openTagManager(); } };
+      return;
+    }
+    if (btn.dataset.act === "cancel") return openTagManager();
+    if (btn.dataset.act === "save"){
+      const nv = cleanTag(r.querySelector("input").value);
+      if (!nv){ $("tmErr").textContent = "Il nome dell'etichetta non può essere vuoto."; return; }
+      if (nv === t) return openTagManager();
+      const other = Object.keys(tagCounts()).find(x => x !== t && x.toLowerCase() === nv.toLowerCase());
+      const target = other || nv;
+      if (other && !(await askConfirm("Unire le etichette?", `Esiste già "${other}": i libri con "${t}" passeranno a "${other}".`, "Unisci"))) return;
+      try { applyTagChange(t, target); openTagManager(); } catch(err){ $("tmErr").textContent = errText(err); }
+      return;
+    }
+    if (btn.dataset.act === "del"){
+      const c = tagCounts()[t] || 0;
+      if (!(await askConfirm(`Eliminare "${t}"?`, `L'etichetta verrà tolta da ${nb(c)}. I libri non vengono cancellati.`, "Elimina", true))) return;
+      try { applyTagChange(t, null); openTagManager(); } catch(err){ $("tmErr").textContent = errText(err); }
+    }
+  };
+}
 $("fTagNew").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); addNewTag(); } });
 let sortTouched = false;
 $("fAuthor").addEventListener("input", () => { if (!sortTouched) $("fAuthorSort").value = authorLabel($("fAuthor").value); });
@@ -1522,6 +1602,7 @@ $("form").addEventListener("submit", async e => {
     spineW: state.spineW || null,
     spineH: state.spineH || null,
     notes: prev?.notes || null,
+    mynotes: prev?.mynotes || null,
     quotes: (prev && authorKey(prev.author) === authorKey(author) ? prev.quotes : null) || authorNoteFor(author, prev?.id) || null,
     coverUrl: prev?.coverUrl || null,
     coverLocal: prev?.coverLocal || false,
@@ -1577,10 +1658,10 @@ function fillAuthorNotes(){
   if (changed) try { localStorage.setItem(KEY, JSON.stringify(state.books)); } catch(e){}
 }
 function saveTexts(id){
-  const n = document.getElementById("dNotes"), q = document.getElementById("dQuotes");
+  const n = document.getElementById("dNotes"), q = document.getElementById("dQuotes"), my = document.getElementById("dMy");
   if (!n || !q) return 0;
   const before = (state.books.find(x => x.id === id) || {}).quotes || null;
-  updateBook(id, { notes: n.value.trim() || null, quotes: q.value.trim() || null });
+  updateBook(id, { notes: n.value.trim() || null, quotes: q.value.trim() || null, ...(my ? { mynotes: my.value.trim() || null } : {}) });
   const after = q.value.trim() || null;
   return before !== after ? shareAuthorNote(id) : 0;
 }
@@ -1631,6 +1712,9 @@ function openDetail(id){
     <label for="dQuotes">L'autore</label>
     <textarea class="field notesarea quotesarea" id="dQuotes" rows="2" placeholder="Chi è, altre opere, curiosità…">${esc(b.quotes || "")}</textarea>
     <div class="saved" id="dSavedQuotes"></div>
+    <label for="dMy">Note</label>
+    <textarea class="field notesarea quotesarea" id="dMy" rows="2" placeholder="Le tue impressioni, citazioni, chi te l'ha consigliato…">${esc(b.mynotes || "")}</textarea>
+    <div class="saved" id="dSavedMy"></div>
     <div class="err" id="dErr"></div>
     <div class="actions">
       <button class="btn ghost" id="dDel">Elimina</button>
@@ -1639,10 +1723,11 @@ function openDetail(id){
     </div>`;
   const autoGrow = ta => { ta.style.height = "auto"; ta.style.height = Math.max(58, ta.scrollHeight + 2) + "px"; };
   $("dQuotes").addEventListener("input", () => autoGrow($("dQuotes")));
+  $("dMy").addEventListener("input", () => autoGrow($("dMy")));
   $("det").scrollTop = 0;
-  drawCover(b).then(() => { $("detOv").hidden = false; autoGrow($("dQuotes")); $("det").scrollTop = 0; });
+  drawCover(b).then(() => { $("detOv").hidden = false; autoGrow($("dQuotes")); autoGrow($("dMy")); $("det").scrollTop = 0; });
 
-  for (const [elId, field, savedId] of [["dNotes","notes","dSavedNotes"],["dQuotes","quotes","dSavedQuotes"]]){
+  for (const [elId, field, savedId] of [["dNotes","notes","dSavedNotes"],["dQuotes","quotes","dSavedQuotes"],["dMy","mynotes","dSavedMy"]]){
     $(elId).addEventListener("input", () => {
       $(savedId).textContent = "";
       clearTimeout(notesTimer);
