@@ -492,7 +492,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.33";
+const APP_VERSION = "1.34";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -734,7 +734,7 @@ function authorPageHTML(key){
     <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Incolla qui biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
     <div class="saved" id="authorSaved"></div>
     <h2>Opere</h2>
-    <textarea class="field notesarea autogrow" id="authorWorks" data-min="140" placeholder="Scrivi qui tutte le sue opere, una per riga…" style="min-height:140px;overflow:hidden;resize:none;text-align:left">${esc(bulletize(works, 0).text)}</textarea>
+    <textarea class="field notesarea autogrow" id="authorWorks" data-min="140" placeholder="Scrivi qui tutte le sue opere, una per riga…" style="min-height:140px;overflow:hidden;resize:none;text-align:left">${esc(works)}</textarea>
     <div class="saved" id="worksSaved"></div>`;
 }
 const BUL = "• ";
@@ -777,7 +777,14 @@ function renderStats(){
     const keyW = statsAuthor;
     wk.addEventListener("focus", () => { if (!wk.value){ wk.value = BUL; wk.setSelectionRange(BUL.length, BUL.length); } });
     wk.addEventListener("keydown", e => {
-      if (e.key !== "Enter" || e.isComposing) return;
+      if (e.isComposing) return;
+      if (e.key === "Backspace" && wk.selectionStart === wk.selectionEnd){
+        // cancellando subito dopo il pallino si toglie il pallino: la riga resta senza
+        const a = wk.selectionStart, line = wk.value.slice(0, a).split("\n").pop();
+        if (line === BUL){ e.preventDefault(); wk.value = wk.value.slice(0, a - BUL.length) + wk.value.slice(a); wk.setSelectionRange(a - BUL.length, a - BUL.length); wk.dispatchEvent(new Event("input")); }
+        return;
+      }
+      if (e.key !== "Enter") return;
       e.preventDefault();
       const a = wk.selectionStart, b = wk.selectionEnd, line = wk.value.slice(0, a).split("\n").pop();
       if (line === BUL){ // riga vuota con solo il pallino: va a capo senza pallino
@@ -787,9 +794,20 @@ function renderStats(){
       }
       wk.dispatchEvent(new Event("input"));
     });
+    wk.addEventListener("paste", e => {
+      const t = (e.clipboardData || window.clipboardData)?.getData("text"); if (!t) return;
+      e.preventDefault();
+      const a = wk.selectionStart, b = wk.selectionEnd;
+      const atLineStart = a === 0 || wk.value[a - 1] === "\n" || wk.value.slice(0, a).split("\n").pop() === BUL;
+      let lines = t.replace(/\r/g, "").split("\n").map(l => { const c = l.replace(/^\s*[•\-\*]\s*/, ""); return c.trim() ? BUL + c.trim() : ""; });
+      if (!atLineStart && lines.length) lines[0] = lines[0].replace(/^• /, "");
+      else if (wk.value.slice(0, a).split("\n").pop() === BUL && lines.length) lines[0] = lines[0].replace(/^• /, "");
+      const ins = lines.join("\n");
+      wk.value = wk.value.slice(0, a) + ins + wk.value.slice(b);
+      wk.setSelectionRange(a + ins.length, a + ins.length);
+      wk.dispatchEvent(new Event("input"));
+    });
     wk.addEventListener("input", () => {
-      const r = bulletize(wk.value, wk.selectionStart);
-      if (r.text !== wk.value){ wk.value = r.text; wk.setSelectionRange(r.caret, r.caret); }
       growEl(wk); $("worksSaved").textContent = "";
       clearTimeout(worksTimer);
       worksTimer = setTimeout(() => { worksTimer = null; saveAuthorWorks(keyW, wk.value); $("worksSaved").textContent = "Salvato"; }, 600);
