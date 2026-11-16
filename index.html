@@ -501,7 +501,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.40";
+const APP_VERSION = "1.41";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -1564,7 +1564,7 @@ $("importFile").addEventListener("change", async e => {
   if (!cur){ applyImport(books); return; }
   $("menu").innerHTML = `
     <h3>Importa backup</h3>
-    <p>Il file contiene <b>${books.length}</b> libri. Sostituisco i <b>${cur}</b> libri attualmente su questo dispositivo?</p>
+    <p>Il file contiene <b>${books.length}</b> libri. Sostituisco i <b>${cur}</b> libri attualmente su questo dispositivo?<br><span style="font-size:13px;opacity:.8">Le foto che hai caricato restano tutte.</span></p>
     <div class="actions">
       <button class="btn ghost" id="iNo">Annulla</button>
       <button class="btn danger" id="iYes">Sostituisci</button>
@@ -1575,12 +1575,15 @@ $("importFile").addEventListener("change", async e => {
 async function applyImport(books){
   const prev = state.books;
   $("menu").innerHTML = `<h3>Importo…</h3><p>Sto sistemando ${books.length} libri sugli scaffali.</p>`;
-  try { await idb.clear(); } catch(e){}
+  // Le foto già salvate sul dispositivo non vengono MAI cancellate da un import:
+  // il backup aggiunge solo quelle che mancano.
   Object.keys(coverURLs).forEach(dropCoverURL);
   for (const b of books){
-    if (b.coverData){
-      try { const blob = await (await fetch(b.coverData)).blob(); await idb.set(b.id, blob); b.coverLocal = true; } catch(e){}
-    }
+    let has = false; try { has = !!(await idb.get(b.id)); } catch(e){}
+    if (has) b.coverLocal = true;
+    else if (b.coverData){
+      try { const blob = await (await fetch(b.coverData)).blob(); await idb.set(b.id, blob); b.coverLocal = true; } catch(e){ b.coverLocal = false; }
+    } else if (b.coverLocal) b.coverLocal = false;
     delete b.coverData;
   }
   const goals = books.goals; delete books.goals;
@@ -1592,7 +1595,7 @@ async function applyImport(books){
   try { persist(); } catch(e){ state.books = prev; openMenu(); $("mErr").textContent = errText(e); return; }
   if (goals) setMeta("goals", goals);
   if (works) setMeta("works", works);
-  if (authorPhotos) for (const [k, v] of Object.entries(authorPhotos)){ try { await idb.set("author:" + k, await (await fetch(v)).blob()); } catch(e){} }
+  if (authorPhotos) for (const [k, v] of Object.entries(authorPhotos)){ try { if (!(await idb.get("author:" + k))) await idb.set("author:" + k, await (await fetch(v)).blob()); } catch(e){} }
   Object.keys(aPhotoURLs).forEach(k => { URL.revokeObjectURL(aPhotoURLs[k]); delete aPhotoURLs[k]; });
   fillAuthorNotes();
   if (wish && wish.length){
