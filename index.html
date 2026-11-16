@@ -501,7 +501,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.39";
+const APP_VERSION = "1.40";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -643,14 +643,15 @@ $("homeBanner").addEventListener("click", async e => {
   if (e.target.id === "bkLater"){ setMeta("snoozeUntil", new Date(Date.now() + 7 * 86400000).toISOString()); render(); }
   if (e.target.id === "bkNow"){ openMenu(); $("mOk").textContent = await exportBackup(); render(); }
 });
-$("goStats").addEventListener("click", () => { statsSub = null; statsOpen = null; statsAuthor = null; showView("statistiche"); });
+$("goStats").addEventListener("click", () => { statsSub = null; statsOpen = null; statsAuthor = null; authorReturn = null; showView("statistiche"); });
 $("goWish").addEventListener("click", () => showView("dacercare"));
 $("backBtn").addEventListener("click", () => {
+  if (currentView === "statistiche" && statsAuthor && authorReturn){ goBackToBook(); return; }
   if (currentView === "statistiche" && statsAuthor){ statsAuthor = null; renderStats(); window.scrollTo(0, 0); return; }
   if (currentView === "statistiche" && statsSub){ statsSub = null; statsOpen = null; renderStats(); window.scrollTo(0, 0); return; }
   showView("home");
 });
-$("homeLink").addEventListener("click", () => showView("home"));
+$("homeLink").addEventListener("click", () => { authorReturn = null; showView("home"); });
 
 function yearCounts(){
   const m = {};
@@ -688,7 +689,16 @@ function tagStatsHTML(){
       <span class="n">${c}</span>
     </button>`).join("") + `<p class="note">Tocca un'etichetta per vedere i suoi libri.</p>`;
 }
-let statsSub = null, statsOpen = null, statsAuthor = null, authorTimer = null;
+let statsSub = null, statsOpen = null, statsAuthor = null, authorTimer = null, authorReturn = null;
+function goBackToBook(){
+  const r = authorReturn; authorReturn = null;
+  if (!r) return false;
+  statsSub = r.view === "statistiche" ? r.statsSub : null; statsAuthor = r.view === "statistiche" ? r.statsAuthor : null; statsOpen = null;
+  showView(r.view);
+  window.scrollTo(0, r.scroll || 0);
+  if (state.books.some(b => b.id === r.id)) openDetail(r.id);
+  return true;
+}
 function groupBy(kind){
   const m = new Map();
   for (const b of readList()){
@@ -731,7 +741,7 @@ function authorPageHTML(key){
   const avg = rated.length ? Math.round(rated.reduce((s,b) => s + b.rating, 0) / rated.length * 10) / 10 : 0;
   const works = (getMeta().works || {})[k] || "";
   return `
-    <button class="linkbtn" id="authorBack" style="text-decoration:none;font-size:15px">‹ Per autore</button>
+    ${authorReturn ? `<button class="linkbtn" id="authorReturn" style="text-decoration:none;font-size:15px;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">‹ Torna a «${esc(authorReturn.title)}»</button>` : `<button class="linkbtn" id="authorBack" style="text-decoration:none;font-size:15px">‹ Per autore</button>`}
     <h2 style="margin-top:12px;margin-bottom:4px">${esc(label)}</h2>
     <p class="note" style="text-align:left;margin:0 4px 6px">${books.length} ${books.length===1?"libro letto":"libri letti"}${avg ? ` · voto medio ${fmtRating(avg)} ★` : ""}</p>
     <h2>I suoi libri</h2>
@@ -921,9 +931,10 @@ $("viewStats").addEventListener("click", e => {
     if (statsSub === "genere"){ if (k !== "Senza genere") state.tag = k; } else if (statsSub === "anno") state.view = Number(k); else state.author = k;
     return showView("libreria");
   }
+  if (e.target.closest("#authorReturn")){ goBackToBook(); return; }
   if (e.target.closest("#authorBack")){ statsAuthor = null; renderStats(); window.scrollTo(0, 0); return; }
   const g = e.target.closest(".grow");
-  if (g && statsSub === "autore"){ statsAuthor = g.dataset.g; renderStats(); window.scrollTo(0, 0); return; }
+  if (g && statsSub === "autore"){ authorReturn = null; statsAuthor = g.dataset.g; renderStats(); window.scrollTo(0, 0); return; }
   if (g){ const key = statsSub + ":" + g.dataset.g; statsOpen = statsOpen === key ? null : key; renderStats(); return; }
   const r = e.target.closest(".yrow"); if (!r) return;
   state.view = Number(r.dataset.y); state.q = ""; state.author = ""; state.tag = ""; $("q").value = "";
@@ -1985,7 +1996,11 @@ function openDetail(id){
   }
 
   $("dClose").onclick = closeDetail;
-  $("dAuthor").onclick = () => { flushNotes(); closeDetail(); statsSub = "autore"; statsOpen = null; statsAuthor = b.author; showView("statistiche"); };
+  $("dAuthor").onclick = () => {
+    flushNotes();
+    authorReturn = { view: currentView, id, title: b.title, scroll: window.scrollY, statsSub, statsAuthor };
+    closeDetail(); statsSub = "autore"; statsOpen = null; statsAuthor = b.author; showView("statistiche");
+  };
   if (b.reading) $("dFinish").onclick = () => { flushNotes(); closeDetail(); openFinish(id); };
   if (b.list === "wish") $("dToRead").onclick = () => { flushNotes(); moveList(id, "toread"); };
   if (b.list === "toread") $("dStart").onclick = () => { flushNotes(); moveList(id, "reading"); };
