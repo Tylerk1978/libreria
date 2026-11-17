@@ -505,7 +505,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.42";
+const APP_VERSION = "1.43";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -644,7 +644,7 @@ function showView(v, push = true){
 window.addEventListener("popstate", () => showView((location.hash || "").slice(1), false));
 $("goLib").addEventListener("click", () => showView("libreria"));
 $("homeBanner").addEventListener("click", async e => {
-  if (e.target.id === "bkLater"){ setMeta("snoozeUntil", new Date(Date.now() + 7 * 86400000).toISOString()); render(); }
+  if (e.target.id === "bkLater"){ setMeta("snoozeUntil", snoozeTomorrow()); render(); }
   if (e.target.id === "bkNow"){ openMenu(); $("mOk").textContent = await exportBackup(); render(); }
 });
 $("goStats").addEventListener("click", () => { statsSub = null; statsOpen = null; statsAuthor = null; authorReturn = null; showView("statistiche"); });
@@ -1125,15 +1125,10 @@ function openGoal(){
 }
 
 /* ---------- Promemoria backup ---------- */
-const BACKUP_DAYS = 30;
 function daysSince(iso){ return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : Infinity; }
 function backupDue(){
   if (!state.books.length) return false;
-  const m = getMeta();
-  if (m.snoozeUntil && Date.now() < new Date(m.snoozeUntil).getTime()) return false;
-  if (!m.lastBackupAt) return !!m.lastChangeAt && daysSince(m.firstSeenAt || m.lastChangeAt) >= 7;
-  const changed = m.lastChangeAt && new Date(m.lastChangeAt) > new Date(m.lastBackupAt);
-  return changed && daysSince(m.lastBackupAt) >= BACKUP_DAYS;
+  return backupLabelDue(getMeta());
 }
 function lastBackupText(){
   const d = getMeta().lastBackupAt;
@@ -1143,10 +1138,89 @@ function lastBackupText(){
 }
 function bannerHTML(){
   if (!backupDue()) return "";
-  const d = getMeta().lastBackupAt;
-  const txt = d ? `L'ultimo backup è di ${daysSince(d)} giorni fa e da allora hai fatto delle modifiche.` : "Non hai ancora salvato un backup della libreria.";
-  return `<div class="banner"><div><b>È ora di fare un backup</b><span>${txt}</span></div>
-    <div class="banner-acts"><button class="btn ghost small" id="bkLater">Più tardi</button><button class="btn small" id="bkNow">Fai backup</button></div></div>`;
+  return `<div class="banner"><div><b>Backup della sera</b><span>${backupBannerText(getMeta())}</span></div>
+    <div class="banner-acts"><button class="btn ghost small" id="bkLater">Domani</button><button class="btn small" id="bkNow">Fai backup</button></div></div>`;
+}
+/* ---------- Copie automatiche giornaliere ---------- */
+const SNAP_PREFIX = "libreria.", SNAP_DB = "libreria-copie", SNAP_KEEP = 7;
+function dayKey(d = new Date()){ return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function snapDB(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(SNAP_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("snaps", { keyPath: "id" });
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+function snapCollect(){ const data = {}; for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith(SNAP_PREFIX)) data[k] = localStorage.getItem(k); } return data; }
+async function snapAll(){
+  const db = await snapDB();
+  return new Promise(res => { const q = db.transaction("snaps").objectStore("snaps").getAll(); q.onsuccess = () => res((q.result || []).sort((a, b) => b.at.localeCompare(a.at))); q.onerror = () => res([]); });
+}
+async function snapPut(rec){
+  const db = await snapDB();
+  return new Promise((res, rej) => { const t = db.transaction("snaps", "readwrite"); t.objectStore("snaps").put(rec); t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+async function snapDelete(ids){
+  if (!ids.length) return; const db = await snapDB();
+  return new Promise(res => { const t = db.transaction("snaps", "readwrite"); const s = t.objectStore("snaps"); ids.forEach(id => s.delete(id)); t.oncomplete = res; t.onerror = res; });
+}
+async function snapDaily(){
+  try {
+    if (!snapCount(snapCollect())) return;
+    const all = await snapAll(), today = dayKey();
+    if (!all.some(s => s.id === today)) await snapPut({ id: today, at: new Date().toISOString(), data: snapCollect() });
+    const daily = (await snapAll()).filter(s => !s.id.startsWith("r"));
+    const pre = (await snapAll()).filter(s => s.id.startsWith("r"));
+    await snapDelete([...daily.slice(SNAP_KEEP), ...pre.slice(1)].map(s => s.id));
+  } catch(e){}
+}
+function snapLabel(s){
+  const d = new Date(s.at), t = dayKey(), y = dayKey(new Date(Date.now() - 86400000));
+  const when = s.id === t ? "Oggi" : s.id === y ? "Ieri" : d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  return (s.id.startsWith("r") ? "Prima del ripristino · " + d.toLocaleDateString("it-IT") : when.charAt(0).toUpperCase() + when.slice(1)) + " · ore " + d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+}
+async function openSnapshots(){
+  let list = []; try { list = await snapAll(); } catch(e){}
+  $("menu").innerHTML = `
+    <h3>Copie automatiche</h3>
+    <p>Ogni giorno, alla prima apertura, l'app salva da sola una copia dei dati e tiene le ultime ${SNAP_KEEP}. Servono a tornare indietro dopo un errore; le copertine e le foto non sono incluse (restano come sono). Non sostituiscono il backup: se perdi il telefono si perdono anche queste.</p>
+    <div class="miss-list">${list.length ? list.map(s => `<button class="miss-row" data-snap="${esc(s.id)}"><b>${esc(snapLabel(s))}</b><span>${snapUnits(snapCount(s.data))}</span></button>`).join("") : "<p>Nessuna copia ancora: la prima verrà fatta alla prossima apertura.</p>"}</div>
+    <div class="err" id="snErr"></div>
+    <div class="actions"><button class="btn ghost" id="snBack">Indietro</button></div>`;
+  $("menuOv").hidden = false; $("menu").scrollTop = 0;
+  $("snBack").onclick = () => openMenu();
+  $("menu").querySelectorAll("[data-snap]").forEach(b => b.onclick = async () => {
+    const s = list.find(x => x.id === b.dataset.snap); if (!s) return;
+    if (!(await askConfirm("Ripristinare questa copia?", `I dati torneranno com'erano: ${snapLabel(s).toLowerCase()} (${snapUnits(snapCount(s.data))}). Le modifiche fatte dopo andranno perse; prima di procedere salvo comunque una copia dello stato attuale.`, "Ripristina", true))) return;
+    try {
+      const now = new Date().toISOString();
+      await snapPut({ id: "r" + Date.now(), at: now, data: snapCollect() });
+      const keepMeta = (() => { try { return JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch(e){ return {}; } })();
+      Object.keys(snapCollect()).forEach(k => localStorage.removeItem(k));
+      Object.entries(s.data).forEach(([k, v]) => localStorage.setItem(k, v));
+      const m = (() => { try { return JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch(e){ return {}; } })();
+      for (const k of SNAP_KEEP_META) if (keepMeta[k] !== undefined) m[k] = keepMeta[k]; else delete m[k];
+      m.lastChangeAt = now;
+      localStorage.setItem(META_KEY, JSON.stringify(m));
+      location.reload();
+    } catch(e){ $("snErr").textContent = "Ripristino non riuscito."; }
+  });
+}
+function backupLabelDue(m){
+  if (m.snoozeUntil && Date.now() < new Date(m.snoozeUntil).getTime()) return false;
+  if (!m.lastBackupAt) return !!m.lastChangeAt;
+  const changed = !!m.lastChangeAt && new Date(m.lastChangeAt) > new Date(m.lastBackupAt);
+  if (!changed || dayKey(new Date(m.lastBackupAt)) === dayKey()) return false;
+  return new Date().getHours() >= 20 || Date.now() - new Date(m.lastBackupAt).getTime() >= 2 * 86400000;
+}
+function snoozeTomorrow(){ const d = new Date(); d.setHours(24, 0, 0, 0); return d.toISOString(); }
+const SNAP_UNIT = "libri", SNAP_KEEP_META = ["lastBackupAt", "snoozeUntil", "firstSeenAt"];
+function snapUnits(n){ return n + " " + (n === 1 ? "libro" : SNAP_UNIT); }
+function snapCount(data){ try { return (JSON.parse(data[KEY] || "[]") || []).filter(b => !b.list && !b.reading).length; } catch(e){ return 0; } }
+function backupBannerText(m){
+  if (!m.lastBackupAt) return "Non hai ancora salvato un backup. Un tocco e lo metti su iCloud (Salva su File).";
+  const n = daysSince(m.lastBackupAt);
+  return `Hai fatto modifiche dopo l'ultimo backup (${n <= 0 ? "oggi" : n === 1 ? "ieri" : n + " giorni fa"}). Un tocco e lo salvi su iCloud.`;
 }
 
 /* ---------- Da cercare ---------- */
@@ -1610,6 +1684,7 @@ function openMenu(msg){
     <p>I libri sono salvati su questo dispositivo e funzionano anche offline. Per portarli su un altro dispositivo, esporta un backup e importalo lì.</p>
     <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
     <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
+    <button class="item" id="mSnap">Ripristina una copia automatica<small>L'app salva da sola una copia al giorno e tiene le ultime 7</small></button>
     <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
     <button class="item" id="mPhotos">Scarica le foto degli autori<small>Da Wikipedia · non tocca le foto scelte da te · serve internet</small></button>
     <button class="item" id="mMissCover">Libri senza copertina<small>${missingCover().length} libri · tocca per vedere quali</small></button>
@@ -1625,6 +1700,7 @@ function openMenu(msg){
   $("mCsv").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportCSV(); };
   $("mMissCover").onclick = () => openMissing("cover");
   $("mPhotos").onclick = openAuthorPhotosMenu;
+  $("mSnap").onclick = openSnapshots;
   $("mMissPub").onclick = () => openMissing("pub");
 }
 function missingCover(){ return readList().filter(b => !b.coverUrl && !b.coverLocal); }
@@ -2181,6 +2257,8 @@ migrateOldReading();
 fillAuthorNotes();
 if (!getMeta().firstSeenAt) setMeta("firstSeenAt", new Date().toISOString());
 showView((location.hash || "").slice(1), false);
+snapDaily();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible"){ snapDaily(); try { $("homeBanner").innerHTML = bannerHTML(); } catch(e){} } });
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
 if ("serviceWorker" in navigator && location.protocol !== "file:"){
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));

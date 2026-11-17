@@ -1,5 +1,5 @@
 // Service worker: rende "La mia libreria" utilizzabile offline.
-const CACHE = "libreria-v6";
+const CACHE = "libreria-v7";
 const COVERS = "libreria-covers";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 const COVER_HOSTS = ["mzstatic.com", "books.google.com", "books.googleusercontent.com", "covers.openlibrary.org", "archive.org", "wikimedia.org"];
