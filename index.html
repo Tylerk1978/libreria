@@ -460,7 +460,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
   <select class="field" id="tagSel"><option value="">Tutti i generi</option></select>
 </div>
 <nav class="years" id="years"></nav>
-<div class="viewbar"><div class="viewtoggle" id="viewToggle"><button data-m="spine">Costine</button><button data-m="cover">Copertine</button></div><div class="viewtoggle sorttoggle" id="sortToggle"><button data-s="year">Per anno</button><button data-s="az">Autori A–Z</button></div><nav class="letters" id="letters" hidden></nav></div>
+<div class="viewbar"><div class="viewtoggle" id="viewToggle"><button data-m="spine">Costine</button><button data-m="cover">Copertine</button></div></div>
 <div class="status" id="status"></div>
 <main id="main"></main>
 </div>
@@ -574,10 +574,10 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.45";
+const APP_VERSION = "1.47";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
-const state = { sort: "year", fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
+const state = { fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
 
 
 const $ = id => document.getElementById(id);
@@ -654,27 +654,8 @@ function hydrateCovers(root){
 }
 function authorSortLabel(b){ return b.authorSort || authorLabel(b.author); }
 function letterOfBook(b){ const c = norm(authorSortLabel(b)).replace(/[^a-z]/g, "").charAt(0).toUpperCase(); return c || "#"; }
-function renderAZ(books, filtering){
-  const list = books.filter(matches).sort((a,b) => authorSortLabel(a).localeCompare(authorSortLabel(b), "it", { sensitivity: "base" }) || a.title.localeCompare(b.title, "it"));
-  const groups = new Map();
-  for (const b of list){ const l = letterOfBook(b); if (!groups.has(l)) groups.set(l, []); groups.get(l).push(b); }
-  const ABC = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"];
-  $("letters").innerHTML = ABC.map(l => `<button type="button" data-l="${l}" ${groups.has(l) ? "" : "disabled"}>${l}</button>`).join("");
-  $("letters").hidden = !list.length;
-  let html = "";
-  for (const l of ABC){
-    const g = groups.get(l); if (!g) continue;
-    html += `<section class="year-sec letter-sec" id="L-${l === "#" ? "num" : l}"><div class="year-head"><h2>${l}</h2><span>${g.length} ${g.length === 1 ? "libro" : "libri"}</span></div>${shelfHTML(g, "")}</section>`;
-  }
-  if (!html) html = filtering ? `<p class="nores">Nessun libro corrisponde alla ricerca</p>` : `<p class="nores">Nessun libro sugli scaffali</p>`;
-  else if (filtering) html = `<p class="note" style="margin:10px 4px 0;color:var(--muted);font-size:13px">${list.length} di ${books.length} libri</p>` + html;
-  $("main").innerHTML = html;
-  markToggles(); $("viewToggle").hidden = false; $("sortToggle").hidden = false;
-  hydrateCovers($("main"));
-  state.newId = null;
-}
 function markToggles(){
-  document.querySelectorAll("#sortToggle button").forEach(b => b.classList.toggle("on", b.dataset.s === state.sort)); document.querySelectorAll("#viewToggle button, #wishToggle button").forEach(b => b.classList.toggle("on", b.dataset.m === state.mode)); }
+  document.querySelectorAll("#viewToggle button, #wishToggle button").forEach(b => b.classList.toggle("on", b.dataset.m === state.mode)); }
 function setMode(m){ state.mode = m === "cover" ? "cover" : "spine"; setMeta("viewMode", state.mode === "cover" ? "cover" : null); render(); }
 function render(){
   try { renderHome(); renderStats(); renderWish(); renderReading(); } catch(e){ console.error(e); }
@@ -709,12 +690,7 @@ function render(){
 
   // shelves
   const filtering = !!(state.q || state.author || state.tag);
-  $("years").hidden = state.sort === "az";
-  if (state.sort === "az" && books.length){
-    renderAZ(books, filtering);
-    return;
-  }
-  $("letters").hidden = true;
+
   const shown = state.view === "all" ? years : [state.view];
   let html = "", total = 0;
   for (const y of shown){
@@ -735,7 +711,7 @@ function render(){
                      : `<p class="nores">Nessun libro sugli scaffali</p>`;
   }
   $("main").innerHTML = html;
-  markToggles(); $("viewToggle").hidden = !books.length; $("sortToggle").hidden = !books.length;
+  markToggles(); $("viewToggle").hidden = !books.length;
   hydrateCovers($("main"));
   state.newId = null;
 }
@@ -1359,7 +1335,7 @@ function backupLabelDue(m){
   return new Date().getHours() >= 20 || Date.now() - new Date(m.lastBackupAt).getTime() >= 2 * 86400000;
 }
 function snoozeTomorrow(){ const d = new Date(); d.setHours(24, 0, 0, 0); return d.toISOString(); }
-const SNAP_UNIT = "libri", SNAP_KEEP_META = ["lastBackupAt", "snoozeUntil", "firstSeenAt", "viewMode", "textScale", "libSort"];
+const SNAP_UNIT = "libri", SNAP_KEEP_META = ["lastBackupAt", "snoozeUntil", "firstSeenAt", "viewMode", "textScale"];
 function snapUnits(n){ return n + " " + (n === 1 ? "libro" : SNAP_UNIT); }
 function snapCount(data){ try { return (JSON.parse(data[KEY] || "[]") || []).filter(b => !b.list && !b.reading).length; } catch(e){ return 0; } }
 function backupBannerText(m){
@@ -1835,9 +1811,6 @@ function openMenu(msg){
     <button class="item" id="mSnap">Ripristina una copia automatica<small>L'app salva da sola una copia al giorno e tiene le ultime 7</small></button>
     <button class="item" id="mText">Dimensione testo<small>Ingrandisci o rimpicciolisci il testo nelle schede dei libri</small></button>
     <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
-    <button class="item" id="mPhotos">Scarica le foto degli autori<small>Da Wikipedia · non tocca le foto scelte da te · serve internet</small></button>
-    <button class="item" id="mMissCover">Libri senza copertina<small>${missingCover().length} libri · tocca per vedere quali</small></button>
-    <button class="item" id="mMissPub">Libri senza anno di pubblicazione<small>${missingPub().length} libri · tocca per vedere quali</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
     <div class="err" id="mErr"></div>
     <div class="actions"><button class="btn ghost" id="mClose">Chiudi</button></div>
@@ -1847,11 +1820,8 @@ function openMenu(msg){
   $("mExport").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportBackup(); render(); };
   $("mImport").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
   $("mCsv").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportCSV(); };
-  $("mMissCover").onclick = () => openMissing("cover");
-  $("mPhotos").onclick = openAuthorPhotosMenu;
   $("mSnap").onclick = openSnapshots;
   $("mText").onclick = openTextSize;
-  $("mMissPub").onclick = () => openMissing("pub");
 }
 function applyTextScale(){ const s = Number(getMeta().textScale) || 100; document.documentElement.style.setProperty("--ts", String(s / 100)); }
 function openTextSize(){
@@ -2597,8 +2567,6 @@ $("main").addEventListener("click", e => {
   const s = e.target.closest(".spine"); if (s) openDetail(s.dataset.id);
 });
 $("viewToggle").addEventListener("click", e => { const b = e.target.closest("button[data-m]"); if (b) setMode(b.dataset.m); });
-$("sortToggle").addEventListener("click", e => { const b = e.target.closest("button[data-s]"); if (!b) return; state.sort = b.dataset.s === "az" ? "az" : "year"; setMeta("libSort", state.sort === "az" ? "az" : null); if (state.sort === "year" && state.view !== "all") state.view = NOW_YEAR; render(); window.scrollTo(0, 0); });
-$("letters").addEventListener("click", e => { const b = e.target.closest("button[data-l]"); if (!b || b.disabled) return; const el = $("L-" + (b.dataset.l === "#" ? "num" : b.dataset.l)); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 50, behavior: "smooth" }); });
 $("years").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.y === "all" ? "all" : Number(b.dataset.y); render(); });
 let qt; $("q").addEventListener("input", e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value.trim(); if (state.q && state.view !== "all") state.view = "all"; render(); }, 150); });
 $("authorSel").addEventListener("change", e => { state.author = e.target.value; if (state.author) state.view = "all"; render(); });
@@ -2613,7 +2581,7 @@ migrateOldReading();
 fillAuthorNotes();
 if (!getMeta().firstSeenAt) setMeta("firstSeenAt", new Date().toISOString());
 state.mode = getMeta().viewMode === "cover" ? "cover" : "spine";
-state.sort = getMeta().libSort === "az" ? "az" : "year";
+if (getMeta().libSort) setMeta("libSort", null);
 applyTextScale();
 showView((location.hash || "").slice(1), false);
 snapDaily();
