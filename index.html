@@ -270,7 +270,7 @@ textarea.field{min-height:80px;resize:vertical}
 .subcard .sc-s{grid-row:2;color:var(--muted);font-size:13px;margin-top:4px}
 .subcard .chev{grid-row:1/3;grid-column:2;font-size:24px}
 .aphoto-wrap{display:flex;flex-direction:column;align-items:center;margin:26px 0 4px}
-.aphoto{width:170px;height:210px;border-radius:14px;border:1px dashed #6b5132;background:#1d1711;color:var(--muted);cursor:pointer;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(0,0,0,.4)}
+.aphoto{width:170px;height:210px;border-radius:14px;border:1px dashed #6b5132;background:#1d1711;color:var(--muted);cursor:default;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(0,0,0,.4)}
 .aphoto.has{border:0}
 .aphoto img{width:100%;height:100%;object-fit:cover;object-position:center 20%;display:block}
 .aphoto-ph{font-size:13px;line-height:1.6}
@@ -429,7 +429,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
   <button class="card" id="goStats">
     <div class="card-art bars" id="homeBars"></div>
     <div class="card-body">
-      <div class="card-title">Statistiche</div>
+      <div class="card-title">Approfondimenti</div>
       <div class="card-sub" id="homeStatsSub"></div>
     </div>
     <span class="chev">›</span>
@@ -574,7 +574,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.47";
+const APP_VERSION = "1.48";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -786,7 +786,7 @@ function tagStatsHTML(){
       <span class="n">${c}</span>
     </button>`).join("") + `<p class="note">Tocca un'etichetta per vedere i suoi libri.</p>`;
 }
-let statsSub = null, statsOpen = null, statsAuthor = null, authorTimer = null, authorReturn = null, pubMode = "anno";
+let statsSub = null, statsOpen = null, statsAuthor = null, authorTimer = null, authorReturn = null, pubMode = "anno", authSort = "num";
 function goBackToBook(){
   const r = authorReturn; authorReturn = null;
   if (!r) return false;
@@ -812,6 +812,7 @@ function groupBy(kind){
   const arr = [...m.keys()].map(k => ({ key: k, label: label(k), books: m.get(k).sort((a,b) => kind === "anno" ? sortKey(a).localeCompare(sortKey(b)) : ((Number(b.year) - Number(a.year)) || a.title.localeCompare(b.title, "it"))) }));
   if (kind === "anno") return arr.sort((a,b) => Number(b.key) - Number(a.key));
   if (kind === "voto" || kind === "pub") return arr.sort((a,b) => (Number(b.key) || -1) - (Number(a.key) || -1));
+  if (kind === "autore" && authSort === "az") return arr.sort((a,b) => a.label.localeCompare(b.label, "it", { sensitivity: "base" }));
   return arr.sort((a,b) => ((a.key === "Senza genere") - (b.key === "Senza genere")) || (b.books.length - a.books.length) || a.label.localeCompare(b.label, "it"));
 }
 function groupHTML(kind){
@@ -859,7 +860,7 @@ function authorPageHTML(key){
     ${authorReturn ? `<button class="linkbtn" id="authorReturn" style="text-decoration:none;font-size:15px;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">‹ Torna a «${esc(authorReturn.title)}»</button>` : `<button class="linkbtn" id="authorBack" style="text-decoration:none;font-size:15px">‹ Per autore</button>`}
     <h2 style="margin-top:12px;margin-bottom:4px">${esc(label)}</h2>
     <p class="note" style="text-align:left;margin:0 4px 6px">${books.length} ${books.length===1?"libro letto":"libri letti"}${avg ? ` · voto medio ${fmtRating(avg)} ★` : ""}</p>
-    <h2>I suoi libri</h2>
+    <h2>I suoi libri che ho letto</h2>
     <div class="grp-list" style="border-top:1px solid var(--accent);border-radius:14px">
       ${books.length ? books.map(b => thumbRow(b, `letto nel ${b.year}${b.pubYear ? ` · pubblicato nel ${b.pubYear}` : ""}${b.rating ? " · " + fmtRating(b.rating) + " ★" : ""}`)).join("") : `<p class="note" style="text-align:left">Nessun libro letto.</p>`}
       <button class="linkbtn grp-shelf" data-g="${esc(key)}">Vedi sullo scaffale ›</button>
@@ -868,15 +869,14 @@ function authorPageHTML(key){
     <div class="grp-list" style="border-top:1px solid var(--accent);border-radius:14px">
       ${others.map(b => thumbRow(b, `${b.pubYear ? `pubblicato nel ${b.pubYear}` : ""}`, b.reading ? "sto leggendo" : b.list === "wish" ? "da cercare" : "da leggere")).join("")}
     </div>` : ""}
-    <div class="aphoto-wrap"><button type="button" class="aphoto" id="aPhoto" aria-label="Foto dell'autore"><span class="aphoto-ph">＋<br>Carica una foto</span></button>
-      <div class="aphoto-acts" id="aPhotoActs" hidden><button type="button" class="linkbtn" id="aPhotoChange">Carica</button><button type="button" class="linkbtn" id="aPhotoOnline2">Scegli online</button><button type="button" class="linkbtn" id="aPhotoDel">Togli</button></div>
-      <div class="aphoto-acts" id="aPhotoWeb" hidden><button type="button" class="linkbtn" id="aPhotoFind">Scegli una foto online</button></div></div>
+    <div class="aphoto-wrap"><div class="aphoto" id="aPhoto" aria-label="Foto dell'autore"><span class="aphoto-ph">Nessuna foto</span></div></div>
     <h2>Info sull'autore</h2>
     <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Incolla qui biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
     <div class="saved" id="authorSaved"></div>
     <h2>Opere</h2>
     <textarea class="field notesarea autogrow" id="authorWorks" data-min="140" placeholder="Scrivi qui tutte le sue opere, una per riga…" style="min-height:140px;overflow:hidden;resize:none;text-align:left">${esc(works)}</textarea>
-    <div class="saved" id="worksSaved"></div>`;
+    <div class="saved" id="worksSaved"></div>
+    <div class="actions" style="justify-content:center;margin-top:26px"><button type="button" class="btn ghost" id="aEdit">Modifica</button></div>`;
 }
 const BUL = "• ";
 // Mette il pallino all'inizio di ogni riga con testo, mantenendo la posizione del cursore
@@ -1014,9 +1014,7 @@ async function drawAuthorPhoto(key){
   if (!url){ const u = authorUrlMap()[authorKey(key)]; if (u){ url = u; aPhotoURLs[aPhotoKey(key)] = u; } }
   if (statsAuthor !== key || !$("aPhoto")) return;
   btn.classList.toggle("has", !!url);
-  btn.innerHTML = url ? `<img src="${esc(url)}" alt="Foto dell'autore">` : `<span class="aphoto-ph">＋<br>Carica una foto</span>`;
-  $("aPhotoActs").hidden = !url;
-  if ($("aPhotoWeb")) $("aPhotoWeb").hidden = !!url;
+  btn.innerHTML = url ? `<img src="${esc(url)}" alt="Foto dell'autore">` : `<span class="aphoto-ph">Nessuna foto</span>`;
 }
 function pickAuthorPhoto(){ $("authorPhotoFile").value = ""; $("authorPhotoFile").click(); }
 $("authorPhotoFile").addEventListener("change", async e => {
@@ -1034,19 +1032,32 @@ $("authorPhotoFile").addEventListener("change", async e => {
   } catch(err){ $("authorSaved").textContent = "Non sono riuscita a usare questa immagine."; }
 });
 $("viewStats").addEventListener("click", async e => {
-  if (e.target.closest("#aPhoto")){ const has = $("aPhoto").classList.contains("has"); if (!has) pickAuthorPhoto(); return; }
-  if (e.target.closest("#aPhotoChange")) return pickAuthorPhoto();
-  if (e.target.closest("#aPhotoFind") || e.target.closest("#aPhotoOnline2")) return openAuthorPicker(statsAuthor);
-  if (e.target.closest("#aPhotoDel")){
+  if (e.target.closest("#aEdit")) return openAuthorEdit();
+});
+async function openAuthorEdit(){
+  const key = statsAuthor; if (!key) return;
+  const has = await authorHasPhoto(authorKey(key));
+  $("menu").innerHTML = `
+    <h3>Modifica</h3>
+    <p>Foto di ${esc(authorSearchName(key))}</p>
+    <button class="item" id="aeUpload">${has ? "Cambia la foto" : "Carica una foto"}<small>Dalla libreria foto o dalla fotocamera del telefono</small></button>
+    <button class="item" id="aeOnline">Scegli una foto online<small>Da Wikipedia e Open Library · serve internet</small></button>
+    ${has ? `<button class="item" id="aeDel">Togli la foto<small>La foto dell'autore verrà eliminata</small></button>` : ""}
+    <div class="actions"><button class="btn ghost" id="aeClose">Chiudi</button></div>`;
+  $("menuOv").hidden = false; $("menu").scrollTop = 0;
+  $("aeClose").onclick = () => { $("menuOv").hidden = true; };
+  $("aeUpload").onclick = () => { $("menuOv").hidden = true; pickAuthorPhoto(); };
+  $("aeOnline").onclick = () => openAuthorPicker(key);
+  if (has) $("aeDel").onclick = async () => {
+    $("menuOv").hidden = true;
     if (!(await askConfirm("Togliere la foto?", "La foto dell'autore verrà eliminata.", "Togli", true))) return;
-    const key = statsAuthor;
     try { await idb.del(aPhotoKey(key)); } catch(err){}
     { const k = authorKey(key), urls = { ...authorUrlMap() }; delete urls[k]; setMeta("authorPhotoUrls", urls); setAuthorFlags(k, false); }
     dropAuthorURL(authorKey(key));
     setMeta("lastChangeAt", new Date().toISOString());
     drawAuthorPhoto(key);
-  }
-});
+  };
+}
 // Allunga il riquadro al testo senza far saltare la pagina
 function growKeep(el, min){
   const det = document.getElementById("det");
@@ -1133,12 +1144,13 @@ function renderStats(){
     const isG = statsSub === "genere";
     const groups = groupBy(statsSub);
     $("viewStats").innerHTML = `
-      <button class="linkbtn" id="statsBack" style="text-decoration:none;font-size:15px">‹ Statistiche</button>
+      <button class="linkbtn" id="statsBack" style="text-decoration:none;font-size:15px">‹ Approfondimenti</button>
       <div class="sechead" style="margin-top:12px"><h2>${SUB_TITLES[statsSub] || "Per autore"}</h2>${isG ? `<button class="btn ghost small" id="tagManage">Gestisci generi</button>` : ""}</div>
+      ${statsSub === "autore" ? `<div class="viewtoggle pubmode" id="authSortToggle"><button data-a="num" class="${authSort === "num" ? "on" : ""}">Per numero di libri</button><button data-a="az" class="${authSort === "az" ? "on" : ""}">Per ordine alfabetico</button></div>` : ""}
       ${statsSub === "pub" ? `<div class="viewtoggle pubmode" id="pubToggle"><button data-p="anno" class="${pubMode === "anno" ? "on" : ""}">Per anno</button><button data-p="decennio" class="${pubMode === "decennio" ? "on" : ""}">Per decennio</button></div>` : ""}
       <p class="note" style="text-align:left;margin:0 4px 12px">${statsSub === "voto" ? `Tocca un voto per vedere i libri.` : statsSub === "pub" ? `Libri letti in base all'anno di pubblicazione. Tocca una riga per vedere i libri.` : statsSub === "anno" ? `${groups.length} anni di letture. Tocca un anno per vedere i suoi libri.` : isG
         ? `${groups.filter(g => g.key !== "Senza genere").length} generi. Un libro con più generi compare in ognuno.`
-        : `${groups.length} autori, dal più letto.`}${statsSub === "anno" || statsSub === "voto" || statsSub === "pub" ? "" : (isG ? " Tocca una riga per vedere i libri." : " Tocca un autore per aprire la sua pagina.")}</p>
+        : `${groups.length} autori, ${authSort === "az" ? "in ordine alfabetico per cognome" : "dal più letto"}.`}${statsSub === "anno" || statsSub === "voto" || statsSub === "pub" ? "" : (isG ? " Tocca una riga per vedere i libri." : " Tocca un autore per aprire la sua pagina.")}</p>
       ${groupHTML(statsSub)}`;
     return;
   }
@@ -1162,6 +1174,7 @@ $("viewStats").addEventListener("click", e => {
   if (e.target.closest("#goalSet")) return openGoal();
   if (e.target.closest("#tagManage")) return openTagManager();
   if (e.target.closest("#statsBack")){ statsSub = null; statsOpen = null; renderStats(); window.scrollTo(0, 0); return; }
+  const at = e.target.closest("#authSortToggle button[data-a]"); if (at){ authSort = at.dataset.a === "az" ? "az" : "num"; setMeta("authSort", authSort === "az" ? "az" : null); statsOpen = null; renderStats(); return; }
   const pt = e.target.closest("#pubToggle button[data-p]"); if (pt){ pubMode = pt.dataset.p; statsOpen = null; renderStats(); return; }
   const sc = e.target.closest(".subcard");
   if (sc){ statsSub = sc.dataset.sub; statsOpen = null; renderStats(); window.scrollTo(0, 0); return; }
@@ -1335,7 +1348,7 @@ function backupLabelDue(m){
   return new Date().getHours() >= 20 || Date.now() - new Date(m.lastBackupAt).getTime() >= 2 * 86400000;
 }
 function snoozeTomorrow(){ const d = new Date(); d.setHours(24, 0, 0, 0); return d.toISOString(); }
-const SNAP_UNIT = "libri", SNAP_KEEP_META = ["lastBackupAt", "snoozeUntil", "firstSeenAt", "viewMode", "textScale"];
+const SNAP_UNIT = "libri", SNAP_KEEP_META = ["lastBackupAt", "snoozeUntil", "firstSeenAt", "viewMode", "textScale", "authSort"];
 function snapUnits(n){ return n + " " + (n === 1 ? "libro" : SNAP_UNIT); }
 function snapCount(data){ try { return (JSON.parse(data[KEY] || "[]") || []).filter(b => !b.list && !b.reading).length; } catch(e){ return 0; } }
 function backupBannerText(m){
@@ -2581,6 +2594,7 @@ migrateOldReading();
 fillAuthorNotes();
 if (!getMeta().firstSeenAt) setMeta("firstSeenAt", new Date().toISOString());
 state.mode = getMeta().viewMode === "cover" ? "cover" : "spine";
+authSort = getMeta().authSort === "az" ? "az" : "num";
 if (getMeta().libSort) setMeta("libSort", null);
 applyTextScale();
 showView((location.hash || "").slice(1), false);
