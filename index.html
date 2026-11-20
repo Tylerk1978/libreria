@@ -429,7 +429,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
   <button class="card" id="goStats">
     <div class="card-art bars" id="homeBars"></div>
     <div class="card-body">
-      <div class="card-title">Approfondimenti</div>
+      <div class="card-title" id="statsTitle" style="white-space:nowrap;letter-spacing:-.2px">Approfondimenti</div>
       <div class="card-sub" id="homeStatsSub"></div>
     </div>
     <span class="chev">›</span>
@@ -574,7 +574,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.48";
+const APP_VERSION = "1.49";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -1374,9 +1374,11 @@ const LENS_SVG = `<svg class="lens" viewBox="0 0 100 100" aria-hidden="true">
   <path d="M24 32 A18 18 0 0 1 36 21" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="4" stroke-linecap="round"/>
 </svg>`;
 function fitWishTitle(){
-  const t = $("wishTitle"); if (!t || !t.offsetParent) return;
-  let fs = 24; t.style.fontSize = fs + "px";
-  while (t.scrollWidth > t.clientWidth && fs > 12){ fs -= 0.5; t.style.fontSize = fs + "px"; }
+  for (const [id, start] of [["wishTitle", 24], ["statsTitle", 30]]){
+    const t = $(id); if (!t || !t.offsetParent) continue;
+    let fs = start; t.style.fontSize = fs + "px";
+    while (t.scrollWidth > t.clientWidth && fs > 12){ fs -= 0.5; t.style.fontSize = fs + "px"; }
+  }
 }
 window.addEventListener("resize", fitWishTitle);
 function renderWish(){
