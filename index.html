@@ -574,7 +574,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.52";
+const APP_VERSION = "1.53";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -955,21 +955,31 @@ async function saveAuthorPhoto(k, src, auto){
   setMeta("authorPhotoUrls", urls); setAuthorFlags(k, auto, src); dropAuthorURL(k);
   setMeta("lastChangeAt", new Date().toISOString());
 }
-// Mette la foto solo se manca, o se quella attuale era stata messa in automatico: mai sopra una foto tua.
+// Mette la foto solo se l'autore non ne ha nessuna: mai sopra una foto che c'è già
 async function autoAuthorPhoto(name){
   const k = authorKey(name);
-  if (await authorHasPhoto(k) && !authorAutoMap()[k]) return "had";
-  const q = authorSearchName(name);
-  const c = (await authorWikiCandidates(q)).find(x => x.exact);
-  if (!c) return (await authorHasPhoto(k)) ? "had" : "none";
-  if (authorAutoMap()[k] && (getMeta().authorPhotoSrc || {})[k] === c.src) return "had";
-  await saveAuthorPhoto(k, c.src, true); return "new";
+  if (await authorHasPhoto(k)) return "had";
+  const list = await authorPhotoSources(name);
+  for (const c of list){
+    try {
+      const blob = await imageUrlToBlobL(c.src); if (!blob) continue;
+      if (await authorHasPhoto(k)) return "had";
+      await idb.set("author:" + k, blob);
+      const urls = { ...authorUrlMap() }; delete urls[k]; setMeta("authorPhotoUrls", urls);
+      setAuthorFlags(k, true, c.src); dropAuthorURL(k); setMeta("lastChangeAt", new Date().toISOString());
+      return "new";
+    } catch(e){}
+  }
+  // se non si riesce a salvare la foto nel telefono, tengo almeno il link di Wikipedia
+  const w = list.find(c => /^Wikipedia/.test(c.from));
+  if (w && !(await authorHasPhoto(k))){ await saveAuthorPhoto(k, w.src, true); return "new"; }
+  return "none";
 }
 async function openAuthorPicker(name){
   const k = authorKey(name), q = authorSearchName(name);
   $("menu").innerHTML = `<h3>Foto di ${esc(q)}</h3><p>Cerco le foto…</p>`; $("menuOv").hidden = false;
-  const [wk, ol] = await Promise.all([authorWikiCandidates(q), authorOLCandidates(q)]);
-  const list = [...wk.filter(x => x.exact), ...ol, ...wk.filter(x => !x.exact)];
+  const [ps, wk] = await Promise.all([authorPhotoSources(name).catch(() => []), authorWikiCandidates(q).catch(() => [])]);
+  const seen = new Set(), list = [...ps, ...wk].filter(c => !seen.has(c.src) && seen.add(c.src));
   $("menu").innerHTML = `<h3>Foto di ${esc(q)}</h3>
     <p>${list.length ? "Tocca la foto che vuoi usare." : "Non ho trovato foto online per questo autore. Puoi caricarne una tua."}</p>
     <div class="pgrid">${list.map((c, i) => `<button type="button" data-i="${i}"><img src="${esc(c.thumb)}" alt="" loading="lazy" onerror="this.parentNode.remove()"><span>${esc(c.label)} · ${esc(c.from)}</span></button>`).join("")}</div>
@@ -984,12 +994,27 @@ async function openAuthorPicker(name){
 }
 /* ---------- Biografia e opere dell'autore: Wikipedia italiana, poi inglese, poi Wikidata ---------- */
 const authorPageCache = new Map();
+const isWriterPage = p => WRITER_RE.test(p.description || "") || WRITER_RE.test((p.extract || "").slice(0, 400));
+const okPage = p => !("missing" in p) && !(p.pageprops && "disambiguation" in p.pageprops);
+function sameAuthorName(title, name){
+  const t = anorm(String(title).replace(/\s*\(.*\)$/, "")), n = anorm(name);
+  if (t === n) return true;
+  const w = String(name).trim().split(/\s+/), sur = anorm(w[w.length - 1]);
+  return sur.length > 2 && t.endsWith(sur) && t.charAt(0) === n.charAt(0);
+}
 async function authorWikiPage(name, lang){
-  const suff = lang === "it" ? ["scrittore", "scrittrice", "poeta", "giornalista"] : ["writer", "author", "novelist", "poet"];
-  const u = `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=extracts|description|pageprops&exintro=1&explaintext=1&exlimit=max&titles=` + encodeURIComponent([name, ...suff.map(x => `${name} (${x})`)].join("|"));
-  const r = await fetch(u); if (!r.ok) return null; const j = await r.json();
-  const p = Object.values(j.query?.pages || {}).find(p => !("missing" in p) && !(p.pageprops && "disambiguation" in p.pageprops) && WRITER_RE.test(p.description || ""));
-  return p ? { lang, title: p.title, qid: (p.pageprops || {}).wikibase_item || null, extract: (p.extract || "").trim() } : null;
+  const props = "prop=extracts|description|pageprops|pageimages&piprop=thumbnail&pithumbsize=1000&exintro=1&explaintext=1&exlimit=max";
+  const mk = p => ({ lang, title: p.title, qid: (p.pageprops || {}).wikibase_item || null, extract: (p.extract || "").trim(), thumb: (p.thumbnail || {}).source || null });
+  const suff = lang === "it" ? ["scrittore", "scrittrice", "poeta", "giornalista", "autore"] : ["writer", "author", "novelist", "poet"];
+  const base = `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&${props}&`;
+  // 1) titoli esatti: "Nome Cognome", "Nome Cognome (scrittore)"…
+  let r = await fetch(base + "titles=" + encodeURIComponent([name, ...suff.map(x => `${name} (${x})`)].join("|"))); if (!r.ok) throw 0;
+  let pages = Object.values((await r.json()).query?.pages || {}).filter(p => okPage(p) && isWriterPage(p));
+  if (pages.length) return mk(pages.find(p => anorm(p.title) === anorm(name)) || pages[0]);
+  // 2) ricerca libera: nomi scritti in modo diverso (iniziali, accenti, secondi nomi)
+  r = await fetch(base + "generator=search&gsrlimit=8&gsrsearch=" + encodeURIComponent(name)); if (!r.ok) throw 0;
+  pages = Object.values((await r.json()).query?.pages || {}).sort((x, y) => x.index - y.index).filter(p => okPage(p) && isWriterPage(p) && sameAuthorName(p.title, name));
+  return pages.length ? mk(pages[0]) : null;
 }
 // Trova le pagine Wikipedia dell'autore (italiana e inglese), una volta sola per sessione
 async function findAuthorPages(name){
@@ -999,6 +1024,20 @@ async function findAuthorPages(name){
   for (const lang of ["it", "en"]){ try { out[lang] = await authorWikiPage(q, lang); } catch(e){ out.err = true; } }
   if (!out.err) authorPageCache.set(ck, out);
   return out;
+}
+async function wikidataImage(qid){
+  const r = await fetch(`https://www.wikidata.org/w/api.php?action=wbgetclaims&format=json&origin=*&property=P18&entity=${qid}`); if (!r.ok) return null;
+  const f = (((await r.json()).claims || {}).P18 || [])[0]?.mainsnak?.datavalue?.value;
+  return f ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f.replace(/ /g, "_"))}?width=1000` : null;
+}
+// Tutte le foto possibili per l'autore, dalla più affidabile
+async function authorPhotoSources(name){
+  const pg = await findAuthorPages(name), out = [];
+  for (const l of ["it", "en"]) if (pg[l] && pg[l].thumb) out.push({ src: pg[l].thumb, thumb: pg[l].thumb, label: pg[l].title, from: "Wikipedia " + l, exact: true });
+  const qid = (pg.it && pg.it.qid) || (pg.en && pg.en.qid);
+  if (qid){ try { const u = await wikidataImage(qid); if (u) out.push({ src: u, thumb: u.replace("width=1000", "width=300"), label: "Wikimedia Commons", from: "Wikidata", exact: true }); } catch(e){} }
+  try { out.push(...await authorOLCandidates(authorSearchName(name))); } catch(e){}
+  const seen = new Set(); return out.filter(c => !seen.has(c.src) && seen.add(c.src));
 }
 async function findAuthorBio(name){
   const pg = await findAuthorPages(name);
@@ -1029,18 +1068,20 @@ async function wikiParse(lang, params){
   const r = await fetch(`https://${lang}.wikipedia.org/w/api.php?action=parse&format=json&origin=*&redirects=1&` + params);
   if (!r.ok) throw 0; const j = await r.json(); if (j.error) throw 0; return j.parse;
 }
-const WORKS_SEC = /^(opere|opere principali|bibliografia|scritti|romanzi|produzione letteraria|pubblicazioni|libri)$/i;
-// Opere dalla sezione "Opere" di Wikipedia italiana (o dalla pagina "Opere di …" se rimanda lì)
-async function worksFromItWiki(title){
-  const sec = await wikiParse("it", "prop=sections&page=" + encodeURIComponent(title));
-  const top = (sec.sections || []).find(x => x.toclevel === 1 && WORKS_SEC.test(wikiClean(x.line)));
-  if (!top) return [];
-  const wt = ((await wikiParse("it", `prop=wikitext&page=${encodeURIComponent(title)}&section=${top.index}`)).wikitext || {})["*"] || "";
+const WORKS_SEC = { it: /^(opere|opere principali|elenco delle opere|bibliografia|bibliografia essenziale|scritti|romanzi|romanzi e racconti|narrativa|produzione letteraria|opere letterarie|pubblicazioni|libri|opere pubblicate)$/i,
+  en: /^(works|selected works|list of works|bibliography|selected bibliography|novels|books|publications|writings|published works|literary works|fiction)$/i };
+const WORKS_LINK = /\{\{\s*(?:Vedi anche|Per approfondire|Principale|Vedi|Main|Main article|Further|See also)\s*\|\s*([^}|]+)/i;
+// Opere dalla sezione "Opere" di Wikipedia (o dalla pagina "Opere di …" / "… bibliography" se rimanda lì)
+async function worksFromWiki(lang, title){
+  const sec = (await wikiParse(lang, "prop=sections&page=" + encodeURIComponent(title))).sections || [];
+  const hits = sec.filter(x => WORKS_SEC[lang].test(wikiClean(x.line))).sort((x, y) => x.toclevel - y.toclevel);
+  if (!hits.length) return [];
+  const wt = ((await wikiParse(lang, `prop=wikitext&page=${encodeURIComponent(title)}&section=${hits[0].index}`)).wikitext || {})["*"] || "";
   let items = wikiListItems(wt);
-  const link = wt.match(/\{\{\s*(?:Vedi anche|Per approfondire|Principale|Vedi)\s*\|\s*([^}|]+)/i);
-  if (items.length < 3 && link){
+  const link = wt.match(WORKS_LINK);
+  if (items.length < 5 && link){
     try {
-      const all = ((await wikiParse("it", "prop=wikitext&page=" + encodeURIComponent(link[1].trim()))).wikitext || {})["*"] || "";
+      const all = ((await wikiParse(lang, "prop=wikitext&page=" + encodeURIComponent(link[1].trim()))).wikitext || {})["*"] || "";
       const more = wikiListItems(all); if (more.length > items.length) items = more;
     } catch(e){}
   }
@@ -1070,14 +1111,33 @@ async function worksFromWikidata(qid){
     return out;
   } finally { clearTimeout(tm); }
 }
+// Opere da Open Library: i titoli con più edizioni, in ordine di pubblicazione
+async function worksFromOL(name){
+  const r = await fetch("https://openlibrary.org/search.json?fields=title,first_publish_year,edition_count,author_name&limit=100&author=" + encodeURIComponent(name)); if (!r.ok) return [];
+  const n = anorm(name), seen = new Set();
+  const docs = ((await r.json()).docs || []).filter(d => (d.author_name || []).some(a => anorm(a) === n) && d.title)
+    .sort((a, b) => (b.edition_count || 0) - (a.edition_count || 0)).filter(d => { const k = norm(d.title); return !seen.has(k) && seen.add(k); }).slice(0, 40)
+    .sort((a, b) => (a.first_publish_year || 9999) - (b.first_publish_year || 9999));
+  return docs.map(d => d.title + (d.first_publish_year ? ` (${d.first_publish_year})` : ""));
+}
 async function findAuthorWorks(name){
   const pg = await findAuthorPages(name);
-  if (pg.it){ try { const w = await worksFromItWiki(pg.it.title); if (w.length >= 2) return { list: w, from: "Wikipedia" }; } catch(e){} }
   const qid = (pg.it && pg.it.qid) || (pg.en && pg.en.qid);
-  if (qid){ try { const w = await worksFromWikidata(qid); if (w.length) return { list: w, from: "Wikidata" }; } catch(e){} }
+  let wd = null;
+  if (pg.it){ try { const w = await worksFromWiki("it", pg.it.title); if (w.length >= 2) return { list: w, from: "Wikipedia" }; } catch(e){} }
+  if (qid){ try { wd = await worksFromWikidata(qid); if (wd.length >= 3) return { list: wd, from: "Wikidata" }; } catch(e){} }
+  if (pg.en){ try { const w = await worksFromWiki("en", pg.en.title); if (w.length >= 2) return { list: w, from: "Wikipedia (inglese)" }; } catch(e){} }
+  if (wd && wd.length) return { list: wd, from: "Wikidata" };
+  try { const w = await worksFromOL(authorSearchName(name)); if (w.length) return { list: w, from: "Open Library" }; } catch(e){}
   return null;
 }
 const worksText = w => w.list.map(x => BUL + x).join("\n");
+const photoTried = new Set();
+async function autoPhotoOnOpen(key){
+  const k = authorKey(key);
+  if (!navigator.onLine || photoTried.has(k)) return; photoTried.add(k);
+  try { if ((await autoAuthorPhoto(key)) === "new" && statsAuthor === key) drawAuthorPhoto(key); } catch(e){}
+}
 const worksTried = new Set();
 // Riempie Opere: in automatico solo se è vuoto, mai sopra una lista già scritta
 async function loadAuthorWorks(key, manual){
@@ -1119,35 +1179,39 @@ async function loadAuthorBio(key, manual){
 function authorHasInfo(k){ return state.books.some(b => authorKey(b.author) === k && (b.quotes || "").trim()); }
 function authorHasWorks(k){ return !!String((getMeta().works || {})[k] || "").trim(); }
 let bioRun = null;
-function openAuthorBiosMenu(){
+async function authorMissing(k){ const m = []; if (!(await authorHasPhoto(k))) m.push("foto"); if (!authorHasInfo(k)) m.push("biografia"); if (!authorHasWorks(k)) m.push("opere"); return m; }
+async function openAuthorBiosMenu(){
   const byKey = new Map(); for (const b of state.books) if (b.author && b.author.trim()) { const k = authorKey(b.author); if (!byKey.has(k)) byKey.set(k, b.author.trim()); }
-  const todo = () => [...byKey.entries()].filter(([k]) => !authorHasInfo(k) || !authorHasWorks(k)).map(([, n]) => n).sort((a, b) => a.localeCompare(b, "it"));
-  const nb = [...byKey.keys()].filter(k => !authorHasInfo(k)).length, nw = [...byKey.keys()].filter(k => !authorHasWorks(k)).length, n0 = todo().length;
-  $("menu").innerHTML = `<h3>Biografie e opere degli autori</h3>
-    <p>${n0 ? `Mancano ${nb === 1 ? "1 biografia" : nb + " biografie"} e ${nw === 1 ? "1 lista" : nw + " liste"} di opere. Le cerco su Wikipedia (prima in italiano, poi in inglese) e su Wikidata. Riempio solo i campi vuoti: quello che hai già scritto non viene toccato. Serve internet.` : "Tutti gli autori hanno già biografia e opere."}</p>
-    <p id="abProg" style="font-weight:600"></p><div class="ok" id="abOk"></div><div class="err" id="abErr"></div>
-    <div class="actions"><button class="btn ghost" id="abBack">Indietro</button>${n0 ? `<button class="btn" id="abGo">Scarica (${n0} ${n0 === 1 ? "autore" : "autori"})</button>` : ""}</div>`;
+  const count = async () => { let f = 0, bi = 0, w = 0; const todo = []; for (const [k, n] of byKey){ const m = await authorMissing(k); if (m.includes("foto")) f++; if (m.includes("biografia")) bi++; if (m.includes("opere")) w++; if (m.length) todo.push({ name: n, miss: m }); } todo.sort((a, b) => a.name.localeCompare(b.name, "it")); return { f, bi, w, todo }; };
+  const c0 = await count(), n0 = c0.todo.length;
+  $("menu").innerHTML = `<h3>Completa le schede degli autori</h3>
+    <p>${n0 ? `Su ${byKey.size} autori mancano ${c0.f} foto, ${c0.bi} ${c0.bi === 1 ? "biografia" : "biografie"} e ${c0.w} ${c0.w === 1 ? "lista" : "liste"} di opere. Li cerco su Wikipedia (italiana e inglese), Wikidata e Open Library. Riempio solo quello che manca: foto, testi e liste che hai già non vengono mai toccati. Serve internet.` : "Tutti gli autori hanno già foto, biografia e opere."}</p>
+    <p id="abProg" style="font-weight:600"></p><div class="ok" id="abOk"></div><div class="err" id="abErr"></div><div id="abMiss"></div>
+    <div class="actions"><button class="btn ghost" id="abBack">Indietro</button>${n0 ? `<button class="btn" id="abGo">Completa (${n0} ${n0 === 1 ? "autore" : "autori"})</button>` : ""}</div>`;
   $("abBack").onclick = () => { if (bioRun) bioRun.stop = true; openMenu(); };
   if (!$("abGo")) return;
   $("abGo").onclick = async () => {
     if (bioRun){ bioRun.stop = true; return; }
     if (!navigator.onLine){ $("abErr").textContent = "Serve la connessione a internet."; return; }
-    const names = todo(), run = bioRun = { stop: false }; let i = 0, fb = 0, fw = 0, done = 0;
-    $("abGo").textContent = "Ferma"; $("abOk").textContent = ""; $("abErr").textContent = "";
-    const prog = () => `${done} di ${names.length} · ${fb} ${fb === 1 ? "biografia" : "biografie"}, ${fw} ${fw === 1 ? "lista" : "liste"} di opere`;
+    const list = c0.todo, run = bioRun = { stop: false }; let i = 0, ff = 0, fb = 0, fw = 0, done = 0;
+    $("abGo").textContent = "Ferma"; $("abOk").textContent = ""; $("abErr").textContent = ""; $("abMiss").innerHTML = "";
+    const prog = () => `${done} di ${list.length} · ${ff} foto, ${fb} ${fb === 1 ? "biografia" : "biografie"}, ${fw} ${fw === 1 ? "lista" : "liste"} di opere`;
     const worker = async () => {
-      while (!run.stop && i < names.length){
-        const name = names[i++], k = authorKey(name);
-        if (!authorHasInfo(k)){ try { const bio = await findAuthorBio(name); if (bio && !authorHasInfo(k)){ saveAuthorInfo(name, `${bio.text}\n\n(Fonte: ${bio.from})`); fb++; } } catch(e){} }
+      while (!run.stop && i < list.length){
+        const { name } = list[i++], k = authorKey(name);
+        try { if ((await autoAuthorPhoto(name)) === "new") ff++; } catch(e){}
+        if (!run.stop && !authorHasInfo(k)){ try { const bio = await findAuthorBio(name); if (bio && !authorHasInfo(k)){ saveAuthorInfo(name, `${bio.text}\n\n(Fonte: ${bio.from})`); fb++; } } catch(e){} }
         if (!run.stop && !authorHasWorks(k)){ try { const w = await findAuthorWorks(name); if (w && !authorHasWorks(k)){ saveAuthorWorks(name, worksText(w)); fw++; } } catch(e){} }
         done++; if ($("abProg")) $("abProg").textContent = prog();
       }
     };
     await Promise.all([worker(), worker(), worker()]);
-    bioRun = null;
-    if (fb || fw) setMeta("lastChangeAt", new Date().toISOString());
-    const restB = [...byKey.keys()].filter(k => !authorHasInfo(k)).length, restW = [...byKey.keys()].filter(k => !authorHasWorks(k)).length;
-    if ($("abOk")) $("abOk").textContent = `${run.stop ? "Fermato. " : "Fatto. "}Trovate ${fb === 1 ? "1 biografia" : fb + " biografie"} e ${fw === 1 ? "1 lista" : fw + " liste"} di opere.${restB || restW ? ` Restano vuote ${restB} ${restB === 1 ? "biografia" : "biografie"} e ${restW} ${restW === 1 ? "lista" : "liste"} di opere: puoi scriverle tu o riprovare da «Modifica» nella pagina dell'autore.` : ""}`;
+    bioRun = null; Object.keys(aPhotoURLs).forEach(x => dropAuthorURL(x.slice(7)));
+    if (ff || fb || fw) setMeta("lastChangeAt", new Date().toISOString());
+    const rest = (await count()).todo;
+    if ($("abOk")) $("abOk").textContent = `${run.stop ? "Fermato. " : "Fatto. "}Trovate ${ff} foto, ${fb} ${fb === 1 ? "biografia" : "biografie"} e ${fw} ${fw === 1 ? "lista" : "liste"} di opere.`;
+    if ($("abMiss") && rest.length) $("abMiss").innerHTML = `<p style="margin-top:12px">Ancora da completare a mano (${rest.length}) — apri l'autore e usa «Modifica»:</p>
+      <div style="max-height:220px;overflow:auto;font-size:13px;line-height:1.6;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px">${rest.map(x => `<div><b>${esc(authorLabel(x.name))}</b> · manca ${esc(x.miss.join(", "))}</div>`).join("")}</div>`;
     if ($("abGo")) $("abGo").remove();
   };
 }
@@ -1214,7 +1278,7 @@ async function openAuthorEdit(){
     <h3>Modifica</h3>
     <p>Foto</p>
     <button class="item" id="aeUpload">${has ? "Cambia la foto" : "Carica una foto"}<small>Dalla libreria foto o dalla fotocamera del telefono</small></button>
-    <button class="item" id="aeOnline">Scegli una foto online<small>Da Wikipedia e Open Library · serve internet</small></button>
+    <button class="item" id="aeOnline">Scegli una foto online<small>Da Wikipedia, Wikidata e Open Library · serve internet</small></button>
     ${has ? `<button class="item" id="aeDel">Togli la foto<small>La foto dell'autore verrà eliminata</small></button>` : ""}
     <p style="margin-top:14px">Biografia</p>
     <button class="item" id="aeBio">Carica biografia<small>Da Wikipedia · se c'è già del testo ti chiedo prima di sostituirlo</small></button>
@@ -1317,7 +1381,7 @@ function renderStats(){
       authorTimer = setTimeout(() => { authorTimer = null; try { saveAuthorInfo(key, ta.value); $("authorSaved").textContent = "Salvato"; } catch(e){ $("authorSaved").textContent = errText(e); } }, 600);
     });
     ta.addEventListener("blur", () => { if (authorTimer){ clearTimeout(authorTimer); authorTimer = null; try { saveAuthorInfo(statsAuthor, ta.value); $("authorSaved").textContent = "Salvato"; } catch(e){} } });
-    loadAuthorBio(statsAuthor, false).then(() => loadAuthorWorks(statsAuthor, false));
+    autoPhotoOnOpen(statsAuthor).then(() => loadAuthorBio(statsAuthor, false)).then(() => loadAuthorWorks(statsAuthor, false));
     return;
   }
   if (statsSub){
@@ -2004,7 +2068,7 @@ function openMenu(msg){
     <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
     <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
     <button class="item" id="mSnap">Ripristina una copia automatica<small>L'app salva da sola una copia al giorno e tiene le ultime 7</small></button>
-    <button class="item" id="mBios">Biografie e opere degli autori<small>Scarica in un colpo da internet biografie e liste di opere che mancano</small></button>
+    <button class="item" id="mBios">Completa le schede degli autori<small>Scarica in un colpo da internet foto, biografie e opere che mancano</small></button>
     <button class="item" id="mText">Dimensione testo<small>Ingrandisci o rimpicciolisci il testo nelle schede dei libri</small></button>
     <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
