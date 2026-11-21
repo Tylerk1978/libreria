@@ -574,7 +574,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.50";
+const APP_VERSION = "1.51";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -861,11 +861,10 @@ function authorPageHTML(key){
     <h2 style="margin-top:12px;margin-bottom:4px">${esc(label)}</h2>
     <p class="note" style="text-align:left;margin:0 4px 6px">${books.length} ${books.length===1?"libro letto":"libri letti"}${avg ? ` · voto medio ${fmtRating(avg)} ★` : ""}</p>
     <div class="aphoto-wrap"><div class="aphoto" id="aPhoto" aria-label="Foto dell'autore"><span class="aphoto-ph">Nessuna foto</span></div></div>
-    <div style="text-align:center;margin-top:10px"><button type="button" class="btn ghost small" id="aEdit">Modifica foto</button></div>
     <h2>Info</h2>
     <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
     <div class="saved" id="authorSaved"></div>
-    <div style="margin-top:8px"><button type="button" class="btn ghost small" id="aBio">Carica biografia</button> <span class="hint" id="aBioMsg"></span></div>
+    <div style="margin-top:8px"><button type="button" class="btn ghost small" id="aBio"${note.trim() ? " hidden" : ""}>Carica biografia</button> <span class="hint" id="aBioMsg"></span></div>
     <h2>I suoi libri che ho letto</h2>
     <div class="grp-list" style="border-top:1px solid var(--accent);border-radius:14px">
       ${books.length ? books.map(b => thumbRow(b, `letto nel ${b.year}${b.pubYear ? ` · pubblicato nel ${b.pubYear}` : ""}${b.rating ? " · " + fmtRating(b.rating) + " ★" : ""}`)).join("") : `<p class="note" style="text-align:left">Nessun libro letto.</p>`}
@@ -877,7 +876,8 @@ function authorPageHTML(key){
     </div>` : ""}
     <h2>Opere</h2>
     <textarea class="field notesarea autogrow" id="authorWorks" data-min="140" placeholder="Scrivi qui tutte le sue opere, una per riga…" style="min-height:140px;overflow:hidden;resize:none;text-align:left">${esc(works)}</textarea>
-    <div class="saved" id="worksSaved"></div>`;
+    <div class="saved" id="worksSaved"></div>
+    <div class="actions" style="justify-content:center;margin-top:26px"><button type="button" class="btn ghost" id="aEdit">Modifica</button></div>`;
 }
 const BUL = "• ";
 // Mette il pallino all'inizio di ogni riga con testo, mantenendo la posizione del cursore
@@ -1011,6 +1011,39 @@ async function loadAuthorBio(key, manual){
   if (manual && t.value.trim() && !(await askConfirm("Sostituire il testo?", "In Info c'è già del testo: la biografia trovata lo sostituirà.", "Sostituisci"))) return;
   t.value = `${bio.text}\n\n(Fonte: ${bio.from})`;
   t.dispatchEvent(new Event("input"));
+  if ($("aBio")) $("aBio").hidden = true;
+}
+function authorHasInfo(k){ return state.books.some(b => authorKey(b.author) === k && (b.quotes || "").trim()); }
+let bioRun = null;
+function openAuthorBiosMenu(){
+  const byKey = new Map(); for (const b of state.books) if (b.author && b.author.trim()) { const k = authorKey(b.author); if (!byKey.has(k)) byKey.set(k, b.author.trim()); }
+  const todo = () => [...byKey.entries()].filter(([k]) => !authorHasInfo(k)).map(([, n]) => n).sort((a, b) => a.localeCompare(b, "it"));
+  const n0 = todo().length;
+  $("menu").innerHTML = `<h3>Biografie degli autori</h3>
+    <p>${n0 ? `${n0 === 1 ? "1 autore non ha" : n0 + " autori non hanno"} ancora la biografia in Info. La cerco su Wikipedia (prima in italiano, poi in inglese). Gli autori che hanno già del testo in Info non vengono toccati. Serve internet.` : "Tutti gli autori hanno già del testo in Info."}</p>
+    <p id="abProg" style="font-weight:600"></p><div class="ok" id="abOk"></div><div class="err" id="abErr"></div>
+    <div class="actions"><button class="btn ghost" id="abBack">Indietro</button>${n0 ? `<button class="btn" id="abGo">Scarica le biografie (${n0})</button>` : ""}</div>`;
+  $("abBack").onclick = () => { if (bioRun) bioRun.stop = true; openMenu(); };
+  if (!$("abGo")) return;
+  $("abGo").onclick = async () => {
+    if (bioRun){ bioRun.stop = true; return; }
+    if (!navigator.onLine){ $("abErr").textContent = "Serve la connessione a internet."; return; }
+    const names = todo(), run = bioRun = { stop: false }; let i = 0, found = 0, done = 0;
+    $("abGo").textContent = "Ferma"; $("abOk").textContent = ""; $("abErr").textContent = "";
+    const worker = async () => {
+      while (!run.stop && i < names.length){
+        const name = names[i++];
+        try { const bio = await findAuthorBio(name); if (bio && !authorHasInfo(authorKey(name))){ saveAuthorInfo(name, `${bio.text}\n\n(Fonte: ${bio.from})`); found++; } } catch(e){}
+        done++; if ($("abProg")) $("abProg").textContent = `${done} di ${names.length} · ${found} ${found === 1 ? "biografia trovata" : "biografie trovate"}`;
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    bioRun = null;
+    if (found) setMeta("lastChangeAt", new Date().toISOString());
+    const miss = done - found;
+    if ($("abOk")) $("abOk").textContent = `${run.stop ? "Fermato. " : "Fatto. "}${found} ${found === 1 ? "biografia trovata" : "biografie trovate"}${miss ? `, ${miss} non ${miss === 1 ? "trovata" : "trovate"} (per loro puoi scriverla tu o riprovare da «Modifica» nella pagina dell'autore)` : ""}.`;
+    if ($("abGo")) $("abGo").remove();
+  };
 }
 let authorRun = null;
 function openAuthorPhotosMenu(){
@@ -1072,15 +1105,18 @@ async function openAuthorEdit(){
   const has = await authorHasPhoto(authorKey(key));
   $("menu").innerHTML = `
     <h3>Modifica</h3>
-    <p>Foto di ${esc(authorSearchName(key))}</p>
+    <p>Foto</p>
     <button class="item" id="aeUpload">${has ? "Cambia la foto" : "Carica una foto"}<small>Dalla libreria foto o dalla fotocamera del telefono</small></button>
     <button class="item" id="aeOnline">Scegli una foto online<small>Da Wikipedia e Open Library · serve internet</small></button>
     ${has ? `<button class="item" id="aeDel">Togli la foto<small>La foto dell'autore verrà eliminata</small></button>` : ""}
+    <p style="margin-top:14px">Biografia</p>
+    <button class="item" id="aeBio">Carica biografia<small>Da Wikipedia · se in Info c'è già del testo ti chiedo prima di sostituirlo</small></button>
     <div class="actions"><button class="btn ghost" id="aeClose">Chiudi</button></div>`;
   $("menuOv").hidden = false; $("menu").scrollTop = 0;
   $("aeClose").onclick = () => { $("menuOv").hidden = true; };
   $("aeUpload").onclick = () => { $("menuOv").hidden = true; pickAuthorPhoto(); };
   $("aeOnline").onclick = () => openAuthorPicker(key);
+  $("aeBio").onclick = () => { $("menuOv").hidden = true; loadAuthorBio(key, true); };
   if (has) $("aeDel").onclick = async () => {
     $("menuOv").hidden = true;
     if (!(await askConfirm("Togliere la foto?", "La foto dell'autore verrà eliminata.", "Togli", true))) return;
@@ -1858,6 +1894,7 @@ function openMenu(msg){
     <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
     <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
     <button class="item" id="mSnap">Ripristina una copia automatica<small>L'app salva da sola una copia al giorno e tiene le ultime 7</small></button>
+    <button class="item" id="mBios">Biografie degli autori<small>Scarica in un colpo da Wikipedia le biografie che mancano</small></button>
     <button class="item" id="mText">Dimensione testo<small>Ingrandisci o rimpicciolisci il testo nelle schede dei libri</small></button>
     <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
@@ -1871,6 +1908,7 @@ function openMenu(msg){
   $("mCsv").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportCSV(); };
   $("mSnap").onclick = openSnapshots;
   $("mText").onclick = openTextSize;
+  $("mBios").onclick = openAuthorBiosMenu;
 }
 function applyTextScale(){ const s = Number(getMeta().textScale) || 100; document.documentElement.style.setProperty("--ts", String(s / 100)); }
 function openTextSize(){
