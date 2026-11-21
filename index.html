@@ -574,7 +574,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.49";
+const APP_VERSION = "1.50";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -860,6 +860,12 @@ function authorPageHTML(key){
     ${authorReturn ? `<button class="linkbtn" id="authorReturn" style="text-decoration:none;font-size:15px;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">‹ Torna a «${esc(authorReturn.title)}»</button>` : `<button class="linkbtn" id="authorBack" style="text-decoration:none;font-size:15px">‹ Per autore</button>`}
     <h2 style="margin-top:12px;margin-bottom:4px">${esc(label)}</h2>
     <p class="note" style="text-align:left;margin:0 4px 6px">${books.length} ${books.length===1?"libro letto":"libri letti"}${avg ? ` · voto medio ${fmtRating(avg)} ★` : ""}</p>
+    <div class="aphoto-wrap"><div class="aphoto" id="aPhoto" aria-label="Foto dell'autore"><span class="aphoto-ph">Nessuna foto</span></div></div>
+    <div style="text-align:center;margin-top:10px"><button type="button" class="btn ghost small" id="aEdit">Modifica foto</button></div>
+    <h2>Info</h2>
+    <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
+    <div class="saved" id="authorSaved"></div>
+    <div style="margin-top:8px"><button type="button" class="btn ghost small" id="aBio">Carica biografia</button> <span class="hint" id="aBioMsg"></span></div>
     <h2>I suoi libri che ho letto</h2>
     <div class="grp-list" style="border-top:1px solid var(--accent);border-radius:14px">
       ${books.length ? books.map(b => thumbRow(b, `letto nel ${b.year}${b.pubYear ? ` · pubblicato nel ${b.pubYear}` : ""}${b.rating ? " · " + fmtRating(b.rating) + " ★" : ""}`)).join("") : `<p class="note" style="text-align:left">Nessun libro letto.</p>`}
@@ -869,14 +875,9 @@ function authorPageHTML(key){
     <div class="grp-list" style="border-top:1px solid var(--accent);border-radius:14px">
       ${others.map(b => thumbRow(b, `${b.pubYear ? `pubblicato nel ${b.pubYear}` : ""}`, b.reading ? "sto leggendo" : b.list === "wish" ? "da cercare" : "da leggere")).join("")}
     </div>` : ""}
-    <div class="aphoto-wrap"><div class="aphoto" id="aPhoto" aria-label="Foto dell'autore"><span class="aphoto-ph">Nessuna foto</span></div></div>
-    <h2>Info sull'autore</h2>
-    <textarea class="field notesarea autogrow" id="authorInfo" data-min="140" placeholder="Incolla qui biografia, curiosità…" style="min-height:140px;overflow:hidden;resize:none">${esc(note)}</textarea>
-    <div class="saved" id="authorSaved"></div>
     <h2>Opere</h2>
     <textarea class="field notesarea autogrow" id="authorWorks" data-min="140" placeholder="Scrivi qui tutte le sue opere, una per riga…" style="min-height:140px;overflow:hidden;resize:none;text-align:left">${esc(works)}</textarea>
-    <div class="saved" id="worksSaved"></div>
-    <div class="actions" style="justify-content:center;margin-top:26px"><button type="button" class="btn ghost" id="aEdit">Modifica</button></div>`;
+    <div class="saved" id="worksSaved"></div>`;
 }
 const BUL = "• ";
 // Mette il pallino all'inizio di ogni riga con testo, mantenendo la posizione del cursore
@@ -980,6 +981,37 @@ async function openAuthorPicker(name){
     $("menuOv").hidden = true; if (statsAuthor && authorKey(statsAuthor) === k) drawAuthorPhoto(statsAuthor);
   };
 }
+/* ---------- Biografia dell'autore: Wikipedia italiana, poi inglese ---------- */
+async function authorWikiBio(name, lang){
+  const suff = lang === "it" ? ["scrittore", "scrittrice", "poeta", "giornalista"] : ["writer", "author", "novelist", "poet"];
+  const u = `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=extracts|description|pageprops&exintro=1&explaintext=1&exlimit=max&titles=` + encodeURIComponent([name, ...suff.map(x => `${name} (${x})`)].join("|"));
+  const r = await fetch(u); if (!r.ok) return null; const j = await r.json();
+  const p = Object.values(j.query?.pages || {}).find(p => !("missing" in p) && !(p.pageprops && "disambiguation" in p.pageprops) && WRITER_RE.test(p.description || "") && (p.extract || "").trim().length > 40);
+  return p ? { text: p.extract.trim().replace(/\n{2,}/g, "\n\n"), from: "Wikipedia" + (lang === "it" ? "" : " (inglese)") } : null;
+}
+async function findAuthorBio(name){
+  const q = authorSearchName(name);
+  for (const lang of ["it", "en"]){ try { const r = await authorWikiBio(q, lang); if (r) return r; } catch(e){} }
+  return null;
+}
+const bioTried = new Set();
+// Riempie Info con la biografia: in automatico solo se Info è vuoto, mai sopra un testo già scritto
+async function loadAuthorBio(key, manual){
+  const msg = $("aBioMsg"), btn = $("aBio"), ta = $("authorInfo"); if (!ta) return;
+  if (!navigator.onLine){ if (manual) msg.textContent = "Serve la connessione a internet."; return; }
+  if (!manual){ if (ta.value.trim() || bioTried.has(authorKey(key))) return; bioTried.add(authorKey(key)); }
+  msg.textContent = "Cerco la biografia…"; if (btn) btn.disabled = true;
+  const bio = await findAuthorBio(key);
+  if (statsAuthor !== key || !$("authorInfo")) return;
+  if ($("aBio")) $("aBio").disabled = false;
+  if (!bio){ $("aBioMsg").textContent = manual ? "Non ho trovato una biografia: puoi scriverla tu." : ""; return; }
+  $("aBioMsg").textContent = "";
+  const t = $("authorInfo");
+  if (!manual && t.value.trim()) return;
+  if (manual && t.value.trim() && !(await askConfirm("Sostituire il testo?", "In Info c'è già del testo: la biografia trovata lo sostituirà.", "Sostituisci"))) return;
+  t.value = `${bio.text}\n\n(Fonte: ${bio.from})`;
+  t.dispatchEvent(new Event("input"));
+}
 let authorRun = null;
 function openAuthorPhotosMenu(){
   const byKey = new Map(); for (const b of state.books) if (b.author && b.author.trim()) { const k = authorKey(b.author); if (!byKey.has(k)) byKey.set(k, b.author.trim()); }
@@ -1033,6 +1065,7 @@ $("authorPhotoFile").addEventListener("change", async e => {
 });
 $("viewStats").addEventListener("click", async e => {
   if (e.target.closest("#aEdit")) return openAuthorEdit();
+  if (e.target.closest("#aBio")) return loadAuthorBio(statsAuthor, true);
 });
 async function openAuthorEdit(){
   const key = statsAuthor; if (!key) return;
@@ -1138,6 +1171,7 @@ function renderStats(){
       authorTimer = setTimeout(() => { authorTimer = null; try { saveAuthorInfo(key, ta.value); $("authorSaved").textContent = "Salvato"; } catch(e){ $("authorSaved").textContent = errText(e); } }, 600);
     });
     ta.addEventListener("blur", () => { if (authorTimer){ clearTimeout(authorTimer); authorTimer = null; try { saveAuthorInfo(statsAuthor, ta.value); $("authorSaved").textContent = "Salvato"; } catch(e){} } });
+    loadAuthorBio(statsAuthor, false);
     return;
   }
   if (statsSub){
