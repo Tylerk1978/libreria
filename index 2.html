@@ -404,7 +404,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
       <div class="sub" id="sub">&nbsp;</div>
     </div>
   </div>
-  <div class="hbtns"><button class="iconbtn" id="menuBtn" aria-label="Backup">⋯</button><button class="btn" id="addBtn" hidden>+ Aggiungi libro</button></div>
+  <div class="hbtns"><button class="iconbtn" id="menuBtn" aria-label="Impostazioni"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><button class="btn" id="addBtn" hidden>+ Aggiungi libro</button></div>
 </header>
 
 <section id="viewHome" class="home">
@@ -574,7 +574,7 @@ textarea.quotesarea{min-height:0;height:58px;overflow:hidden;resize:none}
 
 <script>
 (() => {
-const APP_VERSION = "1.53";
+const APP_VERSION = "1.54";
 const PALETTE = ["#7a2e2a","#2f4a3a","#23395b","#c49a3a","#e6d9bd","#1f1d1b","#2c5d63","#5a3550","#a2512b","#6b7b8c","#6b6a3a","#8c2f4b","#3d3a6b","#b8b2a3","#45604d","#9b6b43"];
 const NOW_YEAR = new Date().getFullYear();
 const state = { fIsbn: null, mode: "spine", books: [], view: NOW_YEAR, q: "", author: "", tag: "", ftags: [], newId: null, editing: null, rating: 0, color: "" };
@@ -738,7 +738,7 @@ window.addEventListener("popstate", () => showView((location.hash || "").slice(1
 $("goLib").addEventListener("click", () => showView("libreria"));
 $("homeBanner").addEventListener("click", async e => {
   if (e.target.id === "bkLater"){ setMeta("snoozeUntil", snoozeTomorrow()); render(); }
-  if (e.target.id === "bkNow"){ openMenu(); $("mOk").textContent = await exportBackup(); render(); }
+  if (e.target.id === "bkNow"){ openBackupMenu(); $("mOk").textContent = await exportBackup(); render(); }
 });
 $("goStats").addEventListener("click", () => { statsSub = null; statsOpen = null; statsAuthor = null; authorReturn = null; showView("statistiche"); });
 $("goWish").addEventListener("click", () => showView("dacercare"));
@@ -1566,7 +1566,7 @@ async function openSnapshots(){
     <div class="err" id="snErr"></div>
     <div class="actions"><button class="btn ghost" id="snBack">Indietro</button></div>`;
   $("menuOv").hidden = false; $("menu").scrollTop = 0;
-  $("snBack").onclick = () => openMenu();
+  $("snBack").onclick = () => openBackupMenu();
   $("menu").querySelectorAll("[data-snap]").forEach(b => b.onclick = async () => {
     const s = list.find(x => x.id === b.dataset.snap); if (!s) return;
     if (!(await askConfirm("Ripristinare questa copia?", `I dati torneranno com'erano: ${snapLabel(s).toLowerCase()} (${snapUnits(snapCount(s.data))}). Le modifiche fatte dopo andranno perse; prima di procedere salvo comunque una copia dello stato attuale.`, "Ripristina", true))) return;
@@ -2060,29 +2060,47 @@ function parseBackup(text){
   }
   return out;
 }
-function openMenu(msg){
-  const n = state.books.length;
+// Cartella del menu: titolo, voci e tasto per tornare al menu principale
+function menuFolder(title, items, msg){
   $("menu").innerHTML = `
-    <h3>Backup</h3>
+    <button type="button" id="mfBack" style="background:none;border:0;color:var(--accent);font:600 15px Inter,sans-serif;cursor:pointer;padding:6px 0;margin:-4px 0 10px">‹ Menu</button>
+    <h3>${esc(title)}</h3>
+    ${items}
+    <div class="ok" id="mOk">${esc(msg || "")}</div>
+    <div class="err" id="mErr"></div>
+    <div class="actions"><button class="btn ghost" id="mClose">Chiudi</button></div>`;
+  $("menuOv").hidden = false; $("menu").scrollTop = 0;
+  $("mfBack").onclick = () => openMenu();
+  $("mClose").onclick = () => { $("menuOv").hidden = true; };
+}
+function openMenu(msg){
+  $("menu").innerHTML = `
+    <h3>Impostazioni</h3>
     <p>I libri sono salvati su questo dispositivo e funzionano anche offline. Per portarli su un altro dispositivo, esporta un backup e importalo lì.</p>
-    <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
-    <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
-    <button class="item" id="mSnap">Ripristina una copia automatica<small>L'app salva da sola una copia al giorno e tiene le ultime 7</small></button>
+    <button class="item" id="mBackup"><span style="display:flex;align-items:center;gap:10px"><span aria-hidden="true">📁</span><span style="flex:1">Backup</span><span aria-hidden="true" style="opacity:.6">›</span></span><small>${esc(lastBackupText())}</small></button>
     <button class="item" id="mBios">Completa le schede degli autori<small>Scarica in un colpo da internet foto, biografie e opere che mancano</small></button>
     <button class="item" id="mText">Dimensione testo<small>Ingrandisci o rimpicciolisci il testo nelle schede dei libri</small></button>
-    <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
     <div class="ok" id="mOk">${esc(msg || "")}</div>
     <div class="err" id="mErr"></div>
     <div class="actions"><button class="btn ghost" id="mClose">Chiudi</button></div>
     <p style="text-align:center;font-size:12px;margin-top:14px">Versione ${APP_VERSION}</p>`;
-  $("menuOv").hidden = false;
+  $("menuOv").hidden = false; $("menu").scrollTop = 0;
   $("mClose").onclick = () => $("menuOv").hidden = true;
+  $("mBackup").onclick = () => openBackupMenu();
+  $("mText").onclick = openTextSize;
+  $("mBios").onclick = openAuthorBiosMenu;
+}
+function openBackupMenu(msg){
+  const n = state.books.length;
+  menuFolder("Backup", `
+    <button class="item" id="mExport">Esporta backup<small>${n} ${n===1?"libro":"libri"} in un file .json · ${esc(lastBackupText())}</small></button>
+    <button class="item" id="mCsv">Esporta diario di lettura (Excel)<small>File .csv con tutti i libri letti, da aprire con Excel o Numbers</small></button>
+    <button class="item" id="mImport">Importa backup<small>Sostituisce la libreria di questo dispositivo</small></button>
+    <button class="item" id="mSnap">Ripristina una copia automatica<small>L'app salva da sola una copia al giorno e tiene le ultime 7</small></button>`, msg);
   $("mExport").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportBackup(); render(); };
   $("mImport").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
   $("mCsv").onclick = async () => { $("mErr").textContent = ""; $("mOk").textContent = await exportCSV(); };
   $("mSnap").onclick = openSnapshots;
-  $("mText").onclick = openTextSize;
-  $("mBios").onclick = openAuthorBiosMenu;
 }
 function applyTextScale(){ const s = Number(getMeta().textScale) || 100; document.documentElement.style.setProperty("--ts", String(s / 100)); }
 function openTextSize(){
@@ -2158,7 +2176,7 @@ async function bulkCovers(){
 }
 $("importFile").addEventListener("change", async e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
-  if ($("menuOv").hidden) openMenu();
+  if ($("menuOv").hidden || !$("mErr")) openBackupMenu();
   let books;
   try { books = parseBackup(await f.text()); }
   catch(err){ $("mErr").textContent = err.message; return; }
@@ -2171,7 +2189,7 @@ $("importFile").addEventListener("change", async e => {
       <button class="btn ghost" id="iNo">Annulla</button>
       <button class="btn danger" id="iYes">Sostituisci</button>
     </div>`;
-  $("iNo").onclick = () => openMenu();
+  $("iNo").onclick = () => openBackupMenu();
   $("iYes").onclick = () => applyImport(books);
 });
 async function applyImport(books){
@@ -2195,7 +2213,7 @@ async function applyImport(books){
   const wish = books.wish; delete books.wish;
   const reading = books.reading; delete books.reading;
   state.books = books;
-  try { persist(); } catch(e){ state.books = prev; openMenu(); $("mErr").textContent = errText(e); return; }
+  try { persist(); } catch(e){ state.books = prev; openBackupMenu(); $("mErr").textContent = errText(e); return; }
   if (goals) setMeta("goals", goals);
   if (works) setMeta("works", works);
   if (authorPhotos) for (const [k, v] of Object.entries(authorPhotos)){ try { if (!(await idb.get("author:" + k))) await idb.set("author:" + k, await (await fetch(v)).blob()); } catch(e){} }
@@ -2217,7 +2235,7 @@ async function applyImport(books){
   setMeta("lastBackupAt", new Date().toISOString());
   state.view = "all"; state.q = ""; state.author = ""; state.tag = ""; $("q").value = "";
   render();
-  openMenu(`Importati ${books.length} libri.`);
+  openBackupMenu(`Importati ${books.length} libri.`);
 }
 $("menuOv").addEventListener("click", e => { if (e.target.id === "menuOv") $("menuOv").hidden = true; });
 $("menuBtn").addEventListener("click", () => openMenu());
